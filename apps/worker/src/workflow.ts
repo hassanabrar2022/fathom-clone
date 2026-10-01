@@ -7,6 +7,16 @@ import {
 import { NonRetryableError } from 'cloudflare:workflows';
 import type { IngestionEnv } from './ingestion';
 import {
+  beginAnalysis,
+  checkNotetaker,
+  failCapture,
+  importHighlights,
+  importRecording,
+  importTranscript,
+  type CaptureCheck,
+  type CaptureParams,
+} from './capture';
+import {
   LeaseLost,
   analyzeMeeting,
   failProcessing,
@@ -14,6 +24,7 @@ import {
   planTranscription,
   storeUpload,
   transcribeChunk,
+  transcribePart,
   transcribeWhole,
   type ProcessParams,
   type ProcessingFailure,
@@ -50,6 +61,11 @@ export class ProcessMeetingWorkflow extends WorkflowEntrypoint<
       );
       if (plan.kind === 'whole')
         await step.do('transcribe', model, () => run(() => transcribeWhole(env, p)));
+      if (plan.kind === 'parts')
+        for (let index = plan.next; index < plan.parts; index++)
+          await step.do(`transcribe part ${index + 1}`, model, () =>
+            run(() => transcribePart(env, p, index)),
+          );
       if (plan.kind === 'chunks')
         for (let index = plan.next; index < plan.chunks; index++)
           await step.do(`transcribe part ${index + 1}`, model, () =>
@@ -68,6 +84,63 @@ export class ProcessMeetingWorkflow extends WorkflowEntrypoint<
       });
       await step.do('record failure', storage, () =>
         failProcessing(env, p, failure),
+      );
+    }
+  }
+}
+
+const poll: WorkflowStepConfig = {
+  retries: { limit: 5, delay: '10 seconds', backoff: 'exponential' },
+  timeout: '1 minute',
+};
+const download: WorkflowStepConfig = {
+  retries: { limit: 5, delay: '30 seconds', backoff: 'exponential' },
+  timeout: '30 minutes',
+};
+// Recall can finish the transcript a few minutes after the call.
+const transcript: WorkflowStepConfig = {
+  retries: { limit: 10, delay: '20 seconds', backoff: 'linear' },
+  timeout: '5 minutes',
+};
+// About four hours of calls at the slowest polling rate.
+const MAX_CHECKS = 450;
+
+/** Follows a notetaker bot from scheduled to imported, then hands over to processing. */
+export class CaptureMeetingWorkflow extends WorkflowEntrypoint<
+  IngestionEnv,
+  CaptureParams
+> {
+  async run(event: WorkflowEvent<CaptureParams>, step: WorkflowStep) {
+    const p = event.payload;
+    const env = this.env;
+    try {
+      let state: CaptureCheck = await step.do('check 0', poll, () =>
+        checkNotetaker(env, p),
+      );
+      if (state.next === 'sleep') {
+        await step.sleepUntil('wait for the meeting', new Date(state.until));
+        state = await step.do('check after waiting', poll, () =>
+          checkNotetaker(env, p),
+        );
+      }
+      for (let index = 1; index <= MAX_CHECKS && state.next === 'wait'; index++) {
+        await step.sleep(`pause ${index}`, `${state.delay} seconds`);
+        state = await step.do(`check ${index}`, poll, () => checkNotetaker(env, p));
+      }
+      if (state.next === 'wait')
+        throw new Error('The call ran longer than the notetaker can record');
+      if (state.next !== 'import') return;
+      await step.do('import recording', download, () => importRecording(env, p));
+      await step.do('import transcript', transcript, () => importTranscript(env, p));
+      await step.do('save highlights', poll, () => importHighlights(env, p));
+      await step.do('start notes', poll, () => beginAnalysis(env, p));
+    } catch (error) {
+      console.error('Meeting capture failed', {
+        notetakerId: p.notetakerId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await step.do('record failure', poll, () =>
+        failCapture(env, p, 'The recording could not be imported'),
       );
     }
   }

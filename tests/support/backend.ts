@@ -67,6 +67,11 @@ function matches(row: Row, params: URLSearchParams) {
     const value = rest.join('.');
     if (operator === 'eq' && String(row[key]) !== value) return false;
     if (operator === 'is' && value === 'null' && row[key] != null) return false;
+    if (operator === 'not' && value === 'is.null' && row[key] == null) return false;
+    if (operator === 'in' && !value.slice(1, -1).split(',').includes(String(row[key])))
+      return false;
+    if (operator === 'gte' && !(Date.parse(String(row[key])) >= Date.parse(value)))
+      return false;
   }
   return true;
 }
@@ -78,6 +83,9 @@ export function createBackend(
     moments?: Row[];
     objects?: Record<string, StoredObject>;
     users?: User[];
+    notetakers?: Row[];
+    /** Answers any other host (Recall.ai, Google, media downloads). */
+    external?: (request: Request) => Promise<Response> | Response;
     confirmSignup?: boolean;
   } = {},
 ) {
@@ -85,6 +93,8 @@ export function createBackend(
     meetings: (options.meetings ?? []).map((row) => ({ ...row })),
     meeting_shares: (options.shares ?? []).map((row) => ({ ...row })),
     meeting_moments: (options.moments ?? []).map((row) => ({ ...row })),
+    notetakers: (options.notetakers ?? []).map((row) => ({ ...row })),
+    calendar_connections: [],
   };
   const objects = new Map(Object.entries(options.objects ?? {}));
   const users = new Map(
@@ -113,7 +123,12 @@ export function createBackend(
     };
   }
 
-  async function database(url: URL, method: string, body: unknown) {
+  async function database(
+    url: URL,
+    method: string,
+    body: unknown,
+    request: Request,
+  ) {
     const [, , , table, fn] = url.pathname.split('/');
     if (table === 'rpc' && fn === 'reserve_upload') {
       if (state.reserveError)
@@ -150,13 +165,39 @@ export function createBackend(
       return Response.json(found.slice(0, limit));
     }
     if (method === 'POST') {
-      const inserted = (Array.isArray(body) ? body : [body]).map((item) => ({
-        created_at: new Date().toISOString(),
-        share_token: null,
-        note: '',
-        ...(item as Row),
-      }));
+      const inserted = (Array.isArray(body) ? body : [body]).map((item) =>
+        table === 'meetings'
+          ? meetingRow({
+              processing_progress: 0,
+              processing_attempts: 0,
+              media_uploaded_at: null,
+              transcript: null,
+              ...(item as Row),
+            })
+          : {
+              created_at: new Date().toISOString(),
+              ...(table === 'meeting_moments' ? { share_token: null, note: '' } : {}),
+              ...(table === 'calendar_connections'
+                ? { auto_record: false, access_token: null, access_token_expires_at: null }
+                : {}),
+              ...(table === 'notetakers'
+                ? {
+                    meeting_id: null,
+                    external_id: null,
+                    status_detail: null,
+                    recording_started_at: null,
+                    ended_at: null,
+                    highlights: [],
+                    parts: [],
+                  }
+                : {}),
+              ...(item as Row),
+            },
+      );
       rows.push(...inserted);
+      // Like PostgREST: `Prefer: return=minimal` answers with no body.
+      if (request.headers.get('Prefer')?.includes('return=minimal'))
+        return new Response(null, { status: 201 });
       return Response.json(inserted, { status: 201 });
     }
     if (method === 'PATCH') {
@@ -307,11 +348,12 @@ export function createBackend(
     }
     log.push({ method: request.method, url: request.url, body });
     if (url.origin === SUPABASE_URL && url.pathname.startsWith('/rest/v1/'))
-      return database(url, request.method, body);
+      return database(url, request.method, body, request);
     if (url.origin === SUPABASE_URL && url.pathname.startsWith('/auth/v1/'))
       return auth(url, request, body);
     if (url.hostname.endsWith('.r2.cloudflarestorage.com'))
       return storage(url, request);
+    if (options.external) return options.external(request);
     throw new Error(`Unexpected fetch ${request.method} ${request.url}`);
   });
 
@@ -324,6 +366,14 @@ export function createBackend(
     R2_ACCESS_KEY_ID: 'key-id',
     R2_SECRET_ACCESS_KEY: 'key-secret',
     AI: { run: vi.fn<(model: string, input: unknown) => Promise<unknown>>() },
+    CAPTURE_MEETING: {
+      create: vi.fn<
+        (options: {
+          id: string;
+          params: { notetakerId: string; userId: string };
+        }) => Promise<unknown>
+      >(async () => ({ id: 'capture' })),
+    },
     PROCESS_MEETING: {
       create: vi.fn<
         (options: {

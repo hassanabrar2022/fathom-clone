@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   AudioLines,
+  CalendarDays,
   CheckCircle2,
   Clock3,
   FileAudio,
@@ -19,6 +20,7 @@ import {
   type UploadedMeeting,
 } from '../../../../packages/shared/ingestion';
 import { formatTime } from '../../../../packages/shared/meeting';
+import { transcriptSpeakers } from '../../../../packages/shared/notetaker';
 import {
   createUpload,
   inspectMedia,
@@ -277,12 +279,17 @@ export function MeetingLibrary() {
         <Upload size={30} />
         <h3>No meetings yet</h3>
         <p>
-          Upload a recording to get a searchable transcript, summaries, and
-          action items.
+          Send the notetaker to a call, or upload a recording, to get a
+          searchable transcript, summaries, and action items.
         </p>
-        <Link className="primary-button" to="/app/upload">
-          <Upload size={16} /> Upload your first recording
-        </Link>
+        <div className="empty-actions">
+          <Link className="primary-button" to="/app/record">
+            <CalendarDays size={16} /> Record a meeting
+          </Link>
+          <Link className="secondary-button" to="/app/upload">
+            <Upload size={16} /> Upload a recording
+          </Link>
+        </div>
       </div>
     );
   return (
@@ -304,6 +311,11 @@ export function MeetingLibrary() {
           <div>
             <strong>{item.title}</strong>
             <p>
+              {item.source !== 'upload' && (
+                <span className="source-tag">
+                  {item.source === 'notetaker' ? 'Notetaker' : 'Recorded'}
+                </span>
+              )}
               {formatTime(item.duration_seconds)} ·{' '}
               {new Date(item.created_at).toLocaleDateString(undefined, {
                 month: 'short',
@@ -553,12 +565,10 @@ export function UploadedMeetingDetail({ id }: { id: string }) {
                 id,
                 mediaUrl: `/api/uploads/${id}/media`,
                 duration: meeting.duration_seconds,
-                speakers: [
-                  {
-                    id: 'speaker',
-                    name: meeting.speaker_names.speaker || 'Speaker',
-                  },
-                ],
+                speakers: transcriptSpeakers(
+                  meeting.transcript,
+                  meeting.speaker_names,
+                ),
                 segments: meeting.transcript,
                 intelligence: meeting.intelligence,
               }}

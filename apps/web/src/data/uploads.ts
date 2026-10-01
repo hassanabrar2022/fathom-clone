@@ -104,7 +104,7 @@ function emit(id: string, state: Transfer) {
   transfers.set(id, state);
   window.dispatchEvent(new CustomEvent('fathom-clone-transfer', { detail: id }));
 }
-async function putSigned(
+export async function putSigned(
   url: string,
   body: Blob,
   contentType: string,

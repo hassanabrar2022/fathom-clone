@@ -1,15 +1,34 @@
 # Fathom Clone
 
-A Fathom-style meeting notetaker. Upload a recording and get a timestamped
-transcript, three AI summary views (General, Sales / Customer, Recruiting /
-Interview), action items linked to the moment they were said, saved moments,
-and search across every meeting. Meetings and individual moments can be shared
-with revocable public links.
+A Fathom-style meeting notetaker. Connect Google Calendar or paste a meeting
+link, and a notetaker joins the Google Meet, Zoom, or Teams call, records it,
+and produces a speaker-labelled transcript, three AI summary views (General,
+Sales / Customer, Recruiting / Interview), and action items linked to the
+moment they were said. Highlight moments mid-call, search across every
+meeting, and share meetings or clips with revocable public links. Recordings
+can also be uploaded.
 
 ## Features
 
 - Email/password accounts with email confirmation, password reset, password
   change, and account deletion (removes every recording and row).
+- **Notetaker bot** (Recall.ai): paste a Meet/Zoom/Teams link or switch it on
+  per calendar event. It joins as a guest, records video, and Recall's
+  per-participant transcription names every speaker. A live view follows it
+  from scheduled → joining → waiting room → recording → processing.
+- **Record from this browser** (no bot, no extra service): captures the
+  meeting tab's audio plus your microphone, uploads two-minute parts during
+  the call, and transcribes them with Whisper. Used automatically when no
+  Recall.ai key is configured; this is the stubbed capture layer the brief
+  allows.
+- **Google Calendar**: read-only OAuth connection, upcoming meetings with
+  their video links, a notetaker switch per event, and auto-record (a cron
+  sweep every 5 minutes sends the bot to calls starting soon).
+- **Mid-call highlights**: one click (with an optional note) during the
+  call; each becomes a saved, shareable clip of the half minute before it.
+- **Long, many-person calls**: up to four hours; transcripts keep every
+  speaker; analysis condenses long transcripts window by window so an hour
+  with eight people stays inside the model's context.
 - Direct browser uploads to private R2 storage (MP4, MOV, WebM, MP3, WAV, M4A;
   up to 25 MB and 10 minutes).
 - Background processing in a Cloudflare Workflow: Whisper transcription
@@ -32,6 +51,8 @@ with revocable public links.
 | Processing | Cloudflare Workflows + Workers AI (`whisper-large-v3-turbo`, `llama-3.1-8b-instruct-fp8`) |
 | Storage | Cloudflare R2 (S3 API, presigned uploads) |
 | Database + auth | Supabase Postgres and Supabase Auth |
+| Meeting bot (optional) | Recall.ai bots + `recallai_streaming` transcription |
+| Calendar (optional) | Google Calendar API (OAuth, `calendar.events.readonly`) |
 
 See [docs/architecture.md](docs/architecture.md) for the data model, security
 model, and processing pipeline.
@@ -78,6 +99,32 @@ npm run audit:secrets    # scans the repo and build for leaked credentials
 - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
 - `R2_ACCOUNT_ID`, `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
   (an R2 API token limited to Object Read & Write on the bucket)
+- Optional, notetaker bot: `RECALL_API_KEY`, `RECALL_REGION` (e.g.
+  `us-west-2`). Without them the app offers browser recording only.
+- Optional, Google Calendar: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+  `TOKEN_ENCRYPTION_KEY` (32 random bytes, base64; encrypts stored tokens).
+
+### Setting up Google Calendar
+
+1. Google Cloud console → create a project → **APIs & Services → Library** →
+   enable **Google Calendar API**.
+2. **OAuth consent screen**: External, add your email as a test user, add the
+   scopes `openid`, `email`, and `.../auth/calendar.events.readonly`.
+3. **Credentials → Create credentials → OAuth client ID → Web application**.
+   Authorized redirect URIs: `http://127.0.0.1:5173/api/calendar/callback`
+   (local) and `https://<your-app>/api/calendar/callback` (deployed).
+4. Put the client ID and secret in `.dev.vars`, generate
+   `TOKEN_ENCRYPTION_KEY` (command in `.dev.vars.example`), then
+   `node scripts/setup.mjs secrets` for the deployed Worker.
+
+While the consent screen is in "Testing", only listed test users can connect.
+
+### Setting up the notetaker bot
+
+Create a Recall.ai workspace, copy an API key and its region into
+`.dev.vars`. No webhook is needed: a durable Workflow polls each bot, so it
+works locally and deployed alike. Google Meet bots join as guests, so someone
+in the call must admit "Fathom Clone Notetaker".
 
 Nothing secret is bundled into the browser; the browser only talks to the
 Worker and to R2 through short-lived presigned upload URLs.
@@ -87,7 +134,8 @@ Worker and to R2 through short-lived presigned upload URLs.
 One-time setup:
 
 1. **Database:** apply `supabase/migrations/*.sql` in order (Supabase SQL
-   editor, Supabase CLI, or the Supabase MCP).
+   editor, Supabase CLI, or the Supabase MCP). Requires the `pg_cron`
+   extension (enabled by the second migration).
 2. **Supabase Auth** (dashboard → Authentication → URL Configuration): set the
    Site URL to the app origin and add `<origin>/auth/confirm` and
    `<origin>/auth/reset` to the redirect allow list. For real traffic,
@@ -104,7 +152,15 @@ Each release: `npm run deploy`.
 ## Limits
 
 - Uploads: 25 MB, 10 minutes, 25 per user per day, 5 processing at once.
+  Recorded calls (bot or browser): up to 4 hours.
+- Notetakers: 20 scheduled or live at once per user; 100 highlights per call.
 - Moments: 60 seconds each, 200 per meeting.
 - Rate limits: 10 auth attempts per minute per address and route; 120 changes
   per minute per account.
-- Transcripts have a single speaker label; speaker separation is not inferred.
+- Bot recordings name each participant. Uploads and browser recordings have
+  a single speaker label (rename it on the meeting page); speaker separation
+  is not inferred from audio.
+- Browser recording needs desktop Chrome or Edge, the meeting open in a tab
+  of the same browser, and this app's tab left open until the call ends.
+- Calendar changes after a bot is scheduled (moved or cancelled events) are
+  not followed; switch the notetaker off and on again.

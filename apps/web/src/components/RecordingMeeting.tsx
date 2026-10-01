@@ -32,6 +32,8 @@ import { MeetingIntelligence } from './MeetingIntelligence';
 import { MeetingMoments, type MomentDraft } from './MeetingMoments';
 import './recording.css';
 
+const SPEAKER_COLORS = 6;
+
 export function RecordingExperience({
   recording,
   meetingTitle,
@@ -64,6 +66,9 @@ export function RecordingExperience({
   const [transcriptQuery, setTranscriptQuery] = useState(searchQuery ?? '');
   const [selectedMatchIndex, setSelectedMatchIndex] = useState(-1);
   const [notice, setNotice] = useState('');
+  const speakerColor = (id: string) =>
+    Math.max(0, recording.speakers.findIndex((speaker) => speaker.id === id)) %
+    SPEAKER_COLORS;
   const [mediaAttempt, setMediaAttempt] = useState(0);
   const [momentDraft, setMomentDraft] = useState<MomentDraft | null>(null);
   const [speakerNames, setSpeakerNames] = useState<Record<string, string>>(
@@ -564,7 +569,9 @@ export function RecordingExperience({
         >
           <div className="transcript-source">
             <FileText size={14} />{' '}
-            AI transcript · Speaker identities are not inferred
+            {recording.speakers.length > 1
+              ? 'AI transcript · Speakers named by the meeting'
+              : 'AI transcript · Speaker identities are not inferred'}
           </div>
           {recording.segments.length === 0 ? (
             <div className="transcript-empty">
@@ -582,7 +589,7 @@ export function RecordingExperience({
               >
                 <div className="turn-heading">
                   <span
-                    className={`speaker-dot ${segment.speakerId === 'presenter' ? '' : 'speaker-two'}`}
+                    className={`speaker-dot speaker-c${speakerColor(segment.speakerId)}`}
                   />
                   <button
                     type="button"
@@ -684,7 +691,7 @@ export function RecordingExperience({
           {recording.speakers.map((speaker, index) => (
             <span className="transcript-footer-speaker" key={speaker.id}>
               <span
-                className={`speaker-dot ${index > 0 ? 'speaker-two' : ''}`}
+                className={`speaker-dot speaker-c${index % SPEAKER_COLORS}`}
               />
               {speakerNames[speaker.id]}
             </span>

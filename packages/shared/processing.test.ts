@@ -224,6 +224,48 @@ describe('analysis and completion', () => {
     expect(intelligence.actions).toHaveLength(1);
   });
 
+  it('gives the model named speakers and their timestamps, one line per turn', async () => {
+    const { backend } = setup({
+      ...transcribed,
+      transcript: [
+        { id: 'segment-1', speakerId: 'participant-1', start: 1, end: 3, paragraphs: ['Ship Friday?'] },
+        { id: 'segment-2', speakerId: 'participant-2', start: 4, end: 6, paragraphs: ['Yes, I will.'] },
+      ],
+      speaker_names: { 'participant-1': 'Ada', 'participant-2': 'Grace' },
+    });
+    backend.env.AI.run.mockResolvedValueOnce({ response: JSON.stringify(analysis) });
+    await analyzeMeeting(backend.env, params);
+    const [, input] = backend.env.AI.run.mock.calls[0] as [string, { messages: { content: string }[] }];
+    expect(input.messages[1].content).toContain('Speakers: Ada, Grace.');
+    expect(input.messages[1].content).toContain('[1] Ada: Ship Friday?\n[4] Grace: Yes, I will.');
+  });
+
+  it('condenses an hour-long, eight-person call window by window before analysis', async () => {
+    const turns = Array.from({ length: 720 }, (_, index) => ({
+      id: `segment-${index + 1}`,
+      speakerId: `participant-${index % 8}`,
+      start: index * 5,
+      end: index * 5 + 4.5,
+      paragraphs: [`Point ${index} about the launch plan, budget, hiring, and the customer rollout schedule for next quarter.`],
+    }));
+    const { backend, row } = setup({ ...transcribed, duration_seconds: 3600, transcript: turns });
+    backend.env.AI.run.mockImplementation(async (_model, input) => {
+      const { messages } = input as { messages: { content: string }[] };
+      return messages[0].content.startsWith('You condense')
+        ? { response: '[120] Speaker 3: Budget approved.\nnot a note line' }
+        : { response: JSON.stringify(analysis) };
+    });
+    await analyzeMeeting(backend.env, params);
+    const calls = backend.env.AI.run.mock.calls as [string, { messages: { content: string }[] }][];
+    expect(calls.length).toBeGreaterThan(2);
+    const final = calls.at(-1)![1].messages[1].content;
+    expect(final).toContain('Condensed notes');
+    expect(final).toContain('[120] Speaker 3: Budget approved.');
+    expect(final).not.toContain('not a note line');
+    expect(final.length).toBeLessThan(20000);
+    expect(row().intelligence).not.toBeNull();
+  });
+
   it('retries once with a correction, then fails on unusable output', async () => {
     const { backend, row } = setup(transcribed);
     backend.env.AI.run.mockResolvedValue({ response: '{"not":"valid"}' });

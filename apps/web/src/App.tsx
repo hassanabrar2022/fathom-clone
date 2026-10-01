@@ -12,6 +12,7 @@ import { ThemeToggle } from './ThemeToggle';
 import {
   ArrowRight,
   AudioLines,
+  CalendarDays,
   ChevronRight,
   FileText,
   LayoutGrid,
@@ -26,6 +27,8 @@ import { MeetingSearchResults } from './components/MeetingSearch';
 import { SharedMoment } from './components/SharedMoment';
 import { SharedMeeting } from './components/SharedMeeting';
 import { AccountSettings } from './components/AccountSettings';
+import { ActiveNotetakers, RecordMeeting } from './components/RecordMeeting';
+import { LiveMeeting } from './components/LiveMeeting';
 import { useAuth } from './auth-state';
 import {
   MeetingLibrary,
@@ -49,6 +52,8 @@ function Brand() {
 
 const pageNames: [RegExp, string][] = [
   [/^\/app\/upload/, 'Upload recording'],
+  [/^\/app\/record/, 'Record'],
+  [/^\/app\/live\//, 'Live call'],
   [/^\/app\/settings/, 'Settings'],
   [/^\/app\/meetings\//, 'Meeting detail'],
 ];
@@ -84,6 +89,15 @@ function Shell({ children }: { children: React.ReactNode }) {
             }
           >
             <LayoutGrid size={18} /> Meetings
+          </NavLink>
+          <NavLink
+            to="/app/record"
+            className={() =>
+              `nav-link ${pageName === 'Record' || pageName === 'Live call' ? 'active' : ''}`
+            }
+            aria-label="Record"
+          >
+            <CalendarDays size={18} /> Record
           </NavLink>
           <NavLink
             to="/app/upload"
@@ -170,10 +184,16 @@ function Dashboard() {
           </h1>
           <p>The ideas, decisions, and next steps worth coming back to.</p>
         </div>
-        <Link className="primary-button" to="/app/upload">
-          <Upload size={16} /> Upload recording
-        </Link>
+        <div className="page-heading-actions">
+          <Link className="primary-button" to="/app/record">
+            <CalendarDays size={16} /> Record a meeting
+          </Link>
+          <Link className="secondary-button" to="/app/upload">
+            <Upload size={16} /> Upload
+          </Link>
+        </div>
       </div>
+      <ActiveNotetakers compact />
       <section className="library" aria-labelledby="library-title">
         <div className="section-heading">
           <h2 id="library-title">Meeting library</h2>
@@ -247,6 +267,15 @@ function Dashboard() {
   );
 }
 
+function LiveRoute() {
+  const { id } = useParams();
+  return id && /^[0-9a-f-]{36}$/.test(id) ? (
+    <LiveMeeting key={id} id={id} />
+  ) : (
+    <NotFound />
+  );
+}
+
 function MeetingRoute() {
   const { id } = useParams();
   return id && /^[0-9a-f-]{36}$/.test(id) ? (
@@ -284,6 +313,8 @@ export function App() {
       <Routes>
         <Route index element={<Dashboard />} />
         <Route path="upload" element={<UploadMeeting />} />
+        <Route path="record" element={<RecordMeeting />} />
+        <Route path="live/:id" element={<LiveRoute />} />
         <Route path="settings" element={<AccountSettings />} />
         <Route path="meetings/:id" element={<MeetingRoute />} />
         <Route path="*" element={<NotFound />} />

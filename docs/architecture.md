@@ -5,7 +5,9 @@ Browser ──► Cloudflare Worker ──► Supabase Auth      (sign-in, sessi
    │          │  (static app +  ──► Supabase Postgres (service role, server only)
    │          │   /api/*)       ──► R2 (S3 API)       (recordings)
    │          └─► Workflow ─────► Workers AI          (Whisper, Llama)
-   └──────────── presigned PUT ─► R2 staging/
+   └──────────── presigned PUT ─► R2 staging/, captures/
+              Worker ──► Recall.ai (bots), Google OAuth + Calendar API
+              CaptureMeetingWorkflow ──polls──► Recall.ai, imports into R2
 ```
 
 ## Request flow
@@ -39,6 +41,8 @@ filtered by the signed-in `user_id`.
 | `meetings` | One upload: media metadata, status/progress, processing lease and attempts, transcript and AI notes (jsonb), speaker names. `user_id → auth.users on delete cascade`. |
 | `meeting_shares` | One revocable public token per meeting. |
 | `meeting_moments` | Saved ranges with an optional public token. Cascades with its meeting and user. |
+| `notetakers` | One call the notetaker attends: provider (`recall`/`browser`), bot id, link, status, highlights, browser parts. The meeting it produces shares its id. |
+| `calendar_connections` | One Google Calendar per user: encrypted tokens, auto-record flag. |
 
 `reserve_upload()` creates a meeting row while enforcing the per-user daily and
 in-progress limits under an advisory lock. `expire_stalled_meetings()` runs
@@ -80,3 +84,50 @@ the database cascades remove all rows.
 APIs (`/api/shares/:token`, `/api/moments/:token`) return only that meeting's
 title, transcript, and AI notes, and stream its media through the Worker with
 byte ranges. Revoking a link disables the token immediately.
+
+## Meeting capture
+
+`capture.ts` owns the `notetakers` table: one row per call the notetaker
+attends, with a provider:
+
+- **recall**: `POST /api/notetakers` (or a calendar toggle) creates a
+  Recall.ai bot (`join_at` when the call is 10+ minutes away) and starts a
+  `CaptureMeetingWorkflow`. The workflow sleeps until shortly before
+  `join_at`, then polls the bot every 15 s (30 s while recording), mapping
+  Recall's status changes onto `scheduled → joining → waiting_room →
+  recording → processing`. On `done` it streams the mixed MP4 into
+  `uploads/<id>/media`, creates the meeting row **with the notetaker's id**,
+  converts Recall's per-participant transcript into speaker-labelled
+  segments (names into `speaker_names`), turns highlights into moments, and
+  hands the meeting to `ProcessMeetingWorkflow` for analysis. Every step is
+  idempotent; a bot that is never admitted ends as `failed` with the reason.
+- **browser**: the page captures the meeting tab's audio and the microphone,
+  mixed with Web Audio. A two-minute recorder is restarted continuously; each
+  part goes to `captures/<id>/part-N` with a presigned PUT during the call.
+  On stop, `/finish` creates the meeting row (`audio_parts` = the parts), the
+  continuous recording uploads to staging as the playback file, and normal
+  processing transcribes part by part (`transcribed_parts` makes retries
+  resume exactly).
+
+Highlights are stored as server timestamps and only converted to moment
+ranges once the recording's own start time is known, so they line up with
+playback regardless of join delays.
+
+## Calendar
+
+`calendar.ts`: `/api/calendar/connect` → Google consent (state bound to the
+user in a `__Host-` cookie) → `/api/calendar/callback` stores AES-GCM
+encrypted refresh/access tokens in `calendar_connections`. `GET
+/api/calendar` lists the next seven days from the primary calendar, finds
+each event's Meet/Zoom/Teams link (conference data, location, or
+description), and joins the notetaker state. A unique index on
+`(user_id, calendar_event_id)` keeps one notetaker per event. The Worker's
+cron trigger runs the auto-record sweep every five minutes.
+
+## Long meetings
+
+Analysis sends the transcript as one compact line per turn
+(`[seconds] Speaker: text`). Above 60k characters (roughly an hour with
+many speakers) it first condenses ~36k-character windows into timestamped
+notes, then writes the summaries from those notes, keeping every citation a
+real transcript time.

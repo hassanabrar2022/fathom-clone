@@ -158,6 +158,7 @@ export const uploadedMeetingSchema = z.object({
   processing_progress: z.number(),
   processing_error: processingFailureSchema.nullable(),
   created_at: z.string(),
+  source: z.enum(['upload', 'notetaker', 'browser']).default('upload'),
   transcript: storedTranscriptSchema.nullable(),
   speaker_names: z.record(z.string(), z.string()).default({}),
   intelligence: intelligenceSchema.nullable(),

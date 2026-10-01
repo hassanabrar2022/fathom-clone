@@ -22,6 +22,14 @@ const runtimeSecrets = [
   'R2_ACCESS_KEY_ID',
   'R2_SECRET_ACCESS_KEY',
 ];
+// Optional: the notetaker bot (Recall.ai) and Google Calendar. Sent when set.
+const optionalSecrets = [
+  'RECALL_API_KEY',
+  'RECALL_REGION',
+  'GOOGLE_CLIENT_ID',
+  'GOOGLE_CLIENT_SECRET',
+  'TOKEN_ENCRYPTION_KEY',
+];
 const localOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
@@ -84,13 +92,17 @@ try {
     const missing = runtimeSecrets.filter((name) => !values[name]);
     if (missing.length)
       throw new Error(`Fill these in .dev.vars first: ${missing.join(', ')}`);
+    const names = [
+      ...runtimeSecrets,
+      ...optionalSecrets.filter((name) => values[name]),
+    ];
     wrangler(
       ['secret', 'bulk'],
-      JSON.stringify(
-        Object.fromEntries(runtimeSecrets.map((name) => [name, values[name]])),
-      ),
+      JSON.stringify(Object.fromEntries(names.map((name) => [name, values[name]]))),
     );
-    console.log(`${runtimeSecrets.length} runtime secrets set on the Worker.`);
+    console.log(`${names.length} runtime secrets set on the Worker.`);
+    const skipped = optionalSecrets.filter((name) => !values[name]);
+    if (skipped.length) console.log(`Not set (optional): ${skipped.join(', ')}`);
   } else {
     throw new Error('Usage: node scripts/setup.mjs storage <origin...> | secrets');
   }

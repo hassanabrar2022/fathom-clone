@@ -9,3 +9,16 @@ R2_BUCKET_NAME=fathom-clone-uploads
 # Cloudflare dashboard > R2 > Manage API tokens (Object Read & Write, this bucket only)
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
+
+# --- Optional: notetaker bot (Recall.ai). Without it, calls are recorded from
+# the browser instead. Dashboard > API Keys; region is your workspace's region.
+RECALL_API_KEY=
+RECALL_REGION=us-west-2
+# --- Optional: Google Calendar. Google Cloud console > APIs & Services >
+# Credentials > OAuth client ID (Web application). Authorized redirect URIs:
+#   http://127.0.0.1:5173/api/calendar/callback and https://<app>/api/calendar/callback
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+# 32 random bytes, base64; encrypts stored calendar tokens. Generate with:
+#   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+TOKEN_ENCRYPTION_KEY=

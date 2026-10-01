@@ -7,7 +7,8 @@ import {
   withSecurityHeaders,
   type SecurityEnv,
 } from './security';
-export { ProcessMeetingWorkflow } from './workflow';
+import { autoRecordSweep } from './calendar';
+export { CaptureMeetingWorkflow, ProcessMeetingWorkflow } from './workflow';
 type AssetBinding = { fetch(request: Request): Promise<Response> };
 type Env = { ASSETS: AssetBinding } & Partial<IngestionEnv> & SecurityEnv;
 
@@ -46,5 +47,13 @@ export default {
     if (!new URL(request.url).pathname.startsWith('/api/'))
       return env.ASSETS.fetch(request);
     return withSecurityHeaders(await api(request, env));
+  },
+  /** Cron trigger: send notetakers to meetings on auto-recorded calendars. */
+  async scheduled(
+    _controller: unknown,
+    env: Env,
+    context: { waitUntil(promise: Promise<unknown>): void },
+  ) {
+    context.waitUntil(autoRecordSweep(env as IngestionEnv));
   },
 };

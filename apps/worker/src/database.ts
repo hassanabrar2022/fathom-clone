@@ -87,5 +87,7 @@ export async function db(
       'Meeting storage is temporarily unavailable. Please retry.',
     );
   }
-  return response.status === 204 ? null : response.json();
+  // `return=minimal` writes answer 201 with an empty body.
+  const text = await response.text();
+  return text ? (JSON.parse(text) as unknown) : null;
 }

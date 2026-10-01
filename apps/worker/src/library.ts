@@ -15,6 +15,7 @@ import {
   type MeetingSearchDocument,
 } from '../../../packages/shared/search';
 import type { Meeting } from '../../../packages/shared/meeting';
+import { transcriptSpeakers } from '../../../packages/shared/notetaker';
 
 const momentRowSchema = z.object({
   id: z.string().uuid(),
@@ -46,9 +47,6 @@ async function readBody(request: Request) {
   if (text.length > 4096) throw new ApiError(413, 'Request too large.');
   return JSON.parse(text) as unknown;
 }
-function speakerName(row: Row, speakerId: string) {
-  return row.speaker_names[speakerId] || 'Speaker';
-}
 function sharedRecording(row: Row, mediaUrl: string) {
   return sharedMeetingSchema.parse({
     title: row.title,
@@ -58,7 +56,7 @@ function sharedRecording(row: Row, mediaUrl: string) {
     duration: row.duration_seconds,
     mediaUrl,
     mediaType: row.media_type,
-    speakers: [{ id: 'speaker', name: speakerName(row, 'speaker') }],
+    speakers: transcriptSpeakers(row.transcript, row.speaker_names),
     segments: row.transcript ?? [],
     intelligence: row.intelligence,
   });
@@ -95,7 +93,9 @@ export async function publicMomentApi(request: Request, env: IngestionEnv) {
 }
 
 function searchEntry(row: Row): [Meeting, MeetingSearchDocument] {
-  const names = Object.values(row.speaker_names);
+  const speakers = transcriptSpeakers(row.transcript, row.speaker_names);
+  const names = speakers.map((speaker) => speaker.name);
+  const nameOf = new Map(speakers.map((speaker) => [speaker.id, speaker.name]));
   return [
     {
       id: row.id,
@@ -111,7 +111,7 @@ function searchEntry(row: Row): [Meeting, MeetingSearchDocument] {
       meetingId: row.id,
       transcript: (row.transcript ?? []).map((segment) => ({
         id: segment.id,
-        speaker: speakerName(row, segment.speakerId),
+        speaker: nameOf.get(segment.speakerId) ?? 'Speaker',
         start: segment.start,
         text: segment.paragraphs.join(' '),
       })),

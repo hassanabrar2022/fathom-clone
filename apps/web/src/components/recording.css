@@ -1004,8 +1004,23 @@
   background: var(--accent);
   border-radius: 50%;
 }
-.speaker-dot.speaker-two {
+.speaker-dot.speaker-c1 {
   background: var(--success);
+}
+.speaker-dot.speaker-c2 {
+  background: var(--warning);
+}
+.speaker-dot.speaker-c3 {
+  background: #3d6a9e;
+}
+.speaker-dot.speaker-c4 {
+  background: var(--danger);
+}
+.speaker-dot.speaker-c5 {
+  background: var(--text-tertiary);
+}
+html[data-theme='dark'] .speaker-dot.speaker-c3 {
+  background: #86acd9;
 }
 .speaker-rename-trigger {
   display: inline-flex;

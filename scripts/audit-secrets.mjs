@@ -8,7 +8,7 @@ const values = existsSync('.dev.vars')
 const secrets = [];
 for (const [name, value] of Object.entries(values)) {
   if (
-    /SECRET|TOKEN|SERVICE_ROLE|ACCESS_KEY|DB_URL|POOLER_URL|PASSWORD/.test(
+    /SECRET|TOKEN|SERVICE_ROLE|ACCESS_KEY|API_KEY|ENCRYPTION_KEY|DB_URL|POOLER_URL|PASSWORD/.test(
       name,
     ) &&
     value.length > 12

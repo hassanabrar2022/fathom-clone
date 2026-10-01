@@ -28,7 +28,9 @@ test('a new account sees a clear first step', async ({ page, api }) => {
   api.meetings = [];
   await page.goto('/app');
   await expect(page.getByRole('heading', { name: 'No meetings yet' })).toBeVisible();
-  await page.getByRole('link', { name: 'Upload your first recording' }).click();
+  const empty = page.locator('.empty-state');
+  await expect(empty.getByRole('link', { name: 'Record a meeting' })).toBeVisible();
+  await empty.getByRole('link', { name: 'Upload a recording' }).click();
   await expect(page).toHaveURL(/\/app\/upload$/);
 });
 

@@ -17,8 +17,15 @@
       "name": "fathom-clone-process-meeting",
       "binding": "PROCESS_MEETING",
       "class_name": "ProcessMeetingWorkflow"
+    },
+    {
+      "name": "fathom-clone-capture-meeting",
+      "binding": "CAPTURE_MEETING",
+      "class_name": "CaptureMeetingWorkflow"
     }
   ],
+  // Sends notetakers to upcoming meetings on calendars with auto-record on.
+  "triggers": { "crons": ["*/5 * * * *"] },
   // Per-address limits on sign-in/sign-up/reset, per-account limits on changes.
   "ratelimits": [
     {

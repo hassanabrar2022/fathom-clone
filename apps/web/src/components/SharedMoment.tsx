@@ -274,7 +274,7 @@ function SharedMomentExperience({
                   <section key={segment.id}>
                     <div>
                       <span
-                        className={`speaker-dot ${segment.speakerId === 'presenter' ? '' : 'speaker-two'}`}
+                        className={`speaker-dot speaker-c${Math.max(0, recording.speakers.indexOf(speaker!)) % 6}`}
                       />
                       <strong>{speaker?.name}</strong>
                       <span>{formatTime(Math.max(segment.start, start))}</span>

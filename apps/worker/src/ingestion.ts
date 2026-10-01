@@ -1,6 +1,8 @@
 import { ApiError, db, isUuid, json, requireUser } from './database';
 import { libraryApi, publicMomentApi } from './library';
 import { LONG_RECORDING_SECONDS, type ProcessParams } from './processing';
+import { notetakerApi, type CaptureParams } from './capture';
+import { calendarApi } from './calendar';
 import { AwsClient } from 'aws4fetch';
 import { z } from 'zod';
 import {
@@ -12,6 +14,7 @@ import {
   privateShareTokenSchema,
   sharedMeetingSchema,
 } from '../../../packages/shared/sharing';
+import { transcriptSpeakers } from '../../../packages/shared/notetaker';
 
 export type IngestionEnv = {
   SUPABASE_URL: string;
@@ -24,7 +27,30 @@ export type IngestionEnv = {
   PROCESS_MEETING: {
     create(options: { id: string; params: ProcessParams }): Promise<unknown>;
   };
+  /** Follows a notetaker through its call; see capture.ts. */
+  CAPTURE_MEETING?: {
+    create(options: { id: string; params: CaptureParams }): Promise<unknown>;
+  };
+  RECALL_API_KEY?: string;
+  /** Recall.ai region host prefix, e.g. us-west-2 (default) or eu-central-1. */
+  RECALL_REGION?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  /** 32 random bytes, base64. Encrypts stored calendar tokens. */
+  TOKEN_ENCRYPTION_KEY?: string;
 };
+/** Browser captures: short standalone audio files, transcribed one by one. */
+export const audioPartsSchema = z
+  .array(
+    z.object({
+      index: z.number().int().nonnegative(),
+      key: z.string().regex(/^captures\/[0-9a-f-]{36}\/part-\d+$/),
+      start: z.number().nonnegative(),
+      duration: z.number().positive().max(300),
+      size: z.number().int().positive(),
+    }),
+  )
+  .max(1000);
 export const rowSchema = uploadedMeetingSchema.extend({
   user_id: z.string().uuid(),
   storage_key: z.string(),
@@ -34,8 +60,11 @@ export const rowSchema = uploadedMeetingSchema.extend({
   processing_attempts: z.number(),
   media_uploaded_at: z.string().nullable(),
   updated_at: z.string(),
+  audio_parts: audioPartsSchema.nullable().default(null),
+  transcribed_parts: z.number().int().nonnegative().default(0),
 });
 export type Row = z.infer<typeof rowSchema>;
+export type AudioPart = z.infer<typeof audioPartsSchema>[number];
 const shareRowSchema = z.object({
   meeting_id: z.string().uuid(),
   token: privateShareTokenSchema,
@@ -79,6 +108,7 @@ async function deleteStoredMedia(env: IngestionEnv, row: Row) {
       `${row.storage_key}/audio-media`,
       stagingKey(row, 'media'),
       stagingKey(row, 'audio'),
+      ...(row.audio_parts ?? []).map((part) => part.key),
     ];
     const responses = await Promise.all(
       keys.map((key) =>
@@ -205,9 +235,14 @@ const MAX_PROCESSING_ATTEMPTS = 6;
 const STALE_PROCESSING_MS = 20 * 60 * 1000;
 
 /** Claims the meeting for a new run and hands it to the durable workflow. */
-async function startProcessing(env: IngestionEnv, original: Row) {
+export async function startProcessing(
+  env: IngestionEnv,
+  original: Row,
+  /** The caller knows no run holds this meeting (a notetaker handing over). */
+  handover = false,
+) {
   if (original.status === 'complete') return json(publicRow(original));
-  if (['transcribing', 'analyzing'].includes(original.status)) {
+  if (!handover && ['transcribing', 'analyzing'].includes(original.status)) {
     const idle = Date.now() - Date.parse(original.updated_at);
     if (Number.isFinite(idle) && idle < STALE_PROCESSING_MS)
       return json(publicRow(original), 202);
@@ -295,9 +330,7 @@ export async function ingestionApi(request: Request, env: IngestionEnv) {
           duration: row.duration_seconds,
           mediaUrl: `/api/shares/${publicShare[1]}/media`,
           mediaType: row.media_type,
-          speakers: [
-            { id: 'speaker', name: row.speaker_names.speaker || 'Speaker' },
-          ],
+          speakers: transcriptSpeakers(row.transcript, row.speaker_names),
           segments: row.transcript ?? [],
           intelligence: row.intelligence,
         }),
@@ -311,7 +344,10 @@ export async function ingestionApi(request: Request, env: IngestionEnv) {
         503,
         'Uploads are temporarily unavailable. Please retry shortly.',
       );
-    const libraryResponse = await libraryApi(request, env, userId);
+    const libraryResponse =
+      (await libraryApi(request, env, userId)) ??
+      (await notetakerApi(request, env, userId)) ??
+      (await calendarApi(request, env, userId));
     if (libraryResponse) return libraryResponse;
     if (url.pathname === '/api/uploads') {
       if (request.method === 'GET') {

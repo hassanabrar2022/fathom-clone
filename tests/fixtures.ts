@@ -9,6 +9,11 @@ import {
 import { searchMeetingLibrary } from '../packages/shared/search';
 import type { UploadedMeeting } from '../packages/shared/ingestion';
 import type { PersistedMoment } from '../packages/shared/recording';
+import type {
+  CalendarState,
+  Capabilities,
+  Notetaker,
+} from '../packages/shared/notetaker';
 export { expect };
 export type { Page } from '@playwright/test';
 
@@ -109,7 +114,30 @@ export type ApiState = {
   moments: PersistedMoment[];
   meetingShares: Map<string, string>;
   calls: { method: string; path: string; body: unknown }[];
+  capabilities: Capabilities;
+  notetakers: Notetaker[];
+  calendar: CalendarState;
 };
+
+export function notetaker(overrides: Partial<Notetaker> = {}): Notetaker {
+  return {
+    id: '33333333-3333-4333-8333-333333333333',
+    provider: 'recall',
+    meetingId: null,
+    meetingUrl: 'https://meet.google.com/abc-defg-hij',
+    platform: 'google_meet',
+    title: 'Roadmap review',
+    calendarEventId: null,
+    joinAt: new Date().toISOString(),
+    status: 'joining',
+    statusDetail: 'Joining the call',
+    recordingStartedAt: null,
+    endedAt: null,
+    highlights: [],
+    serverTime: new Date().toISOString(),
+    ...overrides,
+  };
+}
 
 const token = () =>
   crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '');
@@ -240,6 +268,60 @@ async function handle(route: Route, state: ApiState, signedInHere: boolean) {
       ),
     );
   }
+  if (path === '/api/capabilities') return send(state.capabilities);
+  if (path === '/api/calendar' && method === 'GET') return send(state.calendar);
+  const eventToggle = /^\/api\/calendar\/events\/([^/]+)\/notetaker$/.exec(path);
+  if (eventToggle) {
+    const event = state.calendar.events.find((item) => item.id === eventToggle[1]);
+    if (!event) return send({ message: 'Not found.' }, 404);
+    event.notetaker = (body as { enabled: boolean }).enabled
+      ? notetaker({
+          id: crypto.randomUUID(),
+          title: event.title,
+          calendarEventId: event.id,
+          status: 'scheduled',
+          joinAt: event.start,
+        })
+      : null;
+    return send(event.notetaker, 201);
+  }
+  if (path === '/api/notetakers' && method === 'GET')
+    return send(
+      state.notetakers.filter((item) =>
+        ['scheduled', 'joining', 'waiting_room', 'recording', 'processing'].includes(item.status),
+      ),
+    );
+  if (path === '/api/notetakers' && method === 'POST') {
+    const input = body as { provider: 'recall' | 'browser'; title?: string; meetingUrl?: string };
+    const created = notetaker({
+      id: crypto.randomUUID(),
+      provider: input.provider,
+      title: input.title ?? 'Google Meet call',
+      meetingUrl: input.meetingUrl ?? null,
+      status: input.provider === 'recall' ? 'joining' : 'scheduled',
+      statusDetail: input.provider === 'recall' ? 'Joining the call' : null,
+    });
+    state.notetakers.push(created);
+    return send(created, 201);
+  }
+  const live = /^\/api\/notetakers\/([0-9a-f-]{36})(?:\/(highlights))?$/.exec(path);
+  if (live) {
+    const found = state.notetakers.find((item) => item.id === live[1]);
+    if (!found) return send({ message: 'This notetaker could not be found.' }, 404);
+    if (live[2] === 'highlights') {
+      found.highlights.push({
+        id: crypto.randomUUID(),
+        at: new Date().toISOString(),
+        note: (body as { note: string }).note,
+      });
+      return send({ ...found, serverTime: new Date().toISOString() }, 201);
+    }
+    if (method === 'DELETE')
+      Object.assign(found, {
+        status: found.status === 'recording' ? 'processing' : 'cancelled',
+      });
+    return send({ ...found, serverTime: new Date().toISOString() });
+  }
   if (path === '/api/uploads' && method === 'POST') {
     const input = body as {
       title: string;
@@ -334,6 +416,9 @@ export const test = base.extend<{ signedIn: boolean; api: ApiState }>({
         moments: [],
         meetingShares: new Map(),
         calls: [],
+        capabilities: { bot: true, calendar: true },
+        notetakers: [],
+        calendar: { connected: false, email: null, autoRecord: false, events: [] },
       };
       const install = (ctx: BrowserContext, own: boolean) =>
         ctx.route('**/api/**', (route) => handle(route, state, own));

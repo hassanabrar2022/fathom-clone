@@ -24,6 +24,7 @@ declare module 'cloudflare:workers' {
       callback: () => Promise<T>,
     ): Promise<T>;
     sleep(name: string, duration: Duration): Promise<void>;
+    sleepUntil(name: string, timestamp: Date | number): Promise<void>;
   }
   export abstract class WorkflowEntrypoint<Env = unknown, T = unknown> {
     protected env: Env;
