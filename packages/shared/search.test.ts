@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { meetings } from './reviewer-fixture';
-import { searchDocuments } from './reviewer-fixture';
+import { meetings, searchDocuments } from '../../tests/support/recording-fixture';
 import {
   contextualSnippet,
   meetingSearchDocumentsSchema,
@@ -8,73 +7,35 @@ import {
 } from './search';
 
 describe('cross-meeting search', () => {
-  it('indexes every public demo meeting with bounded transcript timestamps', () => {
-    expect(searchDocuments.map((document) => document.meetingId).sort()).toEqual(
-      meetings.map((meeting) => meeting.id).sort(),
-    );
-    searchDocuments.forEach((document) => {
-      const duration = meetings.find(
-        (meeting) => meeting.id === document.meetingId,
-      )!.duration;
-      expect(document.transcript.every((segment) => segment.start <= duration)).toBe(
-        true,
+  it('finds title, summary, participant, and transcript matches', () => {
+    const kinds = (query: string) =>
+      searchMeetingLibrary(meetings, searchDocuments, query).flatMap((result) =>
+        result.matches.map((match) => match.kind),
       );
-    });
+    expect(kinds('pilot planning')).toEqual(['title']);
+    expect(kinds('pricing')).toEqual(['summary']);
+    expect(kinds('taylor')).toContain('participant');
+    expect(
+      searchMeetingLibrary(meetings, searchDocuments, 'stop recording')[0].matches,
+    ).toContainEqual(
+      expect.objectContaining({ kind: 'transcript', speaker: 'Taylor', timestamp: 57 }),
+    );
   });
 
-  it('finds title, summary, transcript, and existing participant matches', () => {
+  it('returns every meeting with context, case-insensitively', () => {
     expect(
-      searchMeetingLibrary(meetings, searchDocuments, 'noise', 'All meetings')[0]
-        .matches[0].kind,
-    ).toBe('title');
-    expect(
-      searchMeetingLibrary(
-        meetings,
-        searchDocuments,
-        'definition of activation',
-        'All meetings',
-      )[0].matches.some((match) => match.kind === 'summary'),
-    ).toBe(true);
-    expect(
-      searchMeetingLibrary(
-        meetings,
-        searchDocuments,
-        'video is not getting recorded',
-        'All meetings',
-      )[0].matches,
-    ).toContainEqual(
-      expect.objectContaining({ kind: 'transcript', timestamp: 97.17 }),
-    );
-    expect(
-      searchMeetingLibrary(
-        meetings,
-        searchDocuments,
-        'stop recording',
-        'All meetings',
-      )[0].matches,
-    ).toContainEqual(
-      expect.objectContaining({ kind: 'transcript', timestamp: 57 }),
-    );
-    expect(
-      searchMeetingLibrary(meetings, searchDocuments, 'taylor', 'All meetings')[0]
-        .matches[0].kind,
-    ).toBe('participant');
+      searchMeetingLibrary(meetings, searchDocuments, 'CONTEXT').map(
+        (result) => result.meeting.id,
+      ),
+    ).toEqual(['pilot-planning', 'customer-check-in']);
+    expect(searchMeetingLibrary(meetings, searchDocuments, '  ')).toEqual([]);
   });
 
-  it('returns useful multi-meeting context and intersects category filters', () => {
-    expect(
-      searchMeetingLibrary(meetings, searchDocuments, 'context', 'All meetings').map(
-        (result) => result.meeting.id,
-      ),
-    ).toEqual(['customer-discovery', 'design-review']);
-    expect(
-      searchMeetingLibrary(meetings, searchDocuments, 'context', 'Customer').map(
-        (result) => result.meeting.id,
-      ),
-    ).toEqual(['customer-discovery']);
-    expect(
-      searchMeetingLibrary(meetings, searchDocuments, 'context', 'Product'),
-    ).toEqual([]);
+  it('ignores an empty summary rather than matching it', () => {
+    const blank = [{ ...meetings[0], summary: '' }];
+    expect(searchMeetingLibrary(blank, [], 'pilot')[0].matches).toEqual([
+      expect.objectContaining({ kind: 'title' }),
+    ]);
   });
 
   it('keeps the matching phrase inside a compact contextual snippet', () => {

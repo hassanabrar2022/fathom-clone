@@ -1,45 +1,38 @@
 import { describe, expect, it } from 'vitest';
-import { fixture as demo } from './reviewer-fixture';
+import { recording } from '../../tests/support/recording-fixture';
 import {
   summaryText,
   transcriptFilename,
   transcriptSegmentText,
   transcriptText,
 } from './export';
-import { recordingSchema } from './recording';
-
-const recording = recordingSchema.parse(demo);
 
 describe('meeting text exports', () => {
   it('formats the selected summary with citations and action metadata', () => {
+    const intelligence = recording.intelligence!;
     const text = summaryText(
-      'From conversation to recording',
-      recording.intelligence.templates[0],
-      recording.intelligence.actions,
+      'Pilot planning',
+      intelligence.templates[0],
+      intelligence.actions,
     );
     expect(text).toContain('Fathom Clone summary · General');
     expect(text).toContain('Key points');
-    expect(text).toContain('The host starts capture');
-    expect(text).toContain('[0:02]');
-    expect(text).toContain('Action items');
-    expect(text).toContain('Owner: Participant');
-    expect(text).toContain('Source: 1:14');
+    expect(text).toContain('The team agreed to ship the pilot on Friday. [0:02]');
+    expect(text).toContain('- No supported findings in this conversation.');
+    expect(text).toContain('Owner: Guest');
+    expect(text).toContain('Source: 0:30');
   });
 
   it('uses current speaker labels and timestamps without altering transcript text', () => {
     const speakers = recording.speakers.map((speaker) =>
-      speaker.id === 'presenter' ? { ...speaker, name: 'Alex' } : speaker,
+      speaker.id === 'host' ? { ...speaker, name: 'Alex' } : speaker,
     );
-    const text = transcriptText(
-      'From conversation to recording',
-      recording.segments,
-      speakers,
-    );
+    const text = transcriptText('Pilot planning', recording.segments, speakers);
     expect(text).toContain('[0:02] Alex');
-    expect(text).toContain('[1:37] Participant');
-    expect(text).toContain("If you don't, you'll see a Fathom panel");
-    expect(transcriptSegmentText(recording.segments[1], 'Guest')).toBe(
-      '[1:37] Guest\nBut my video is not getting recorded. Okay, let me end this meeting.',
+    expect(text).toContain('[0:30] Guest');
+    expect(text).toContain('Let’s ship the pilot on Friday.');
+    expect(transcriptSegmentText(recording.segments[1], 'Sam')).toBe(
+      '[0:30] Sam\nI will send the revised proposal before then.',
     );
   });
 

@@ -4,11 +4,13 @@ const chromiumLaunchOptions = process.env.FATHOM_CLONE_CHROMIUM_EXECUTABLE
   ? { executablePath: process.env.FATHOM_CLONE_CHROMIUM_EXECUTABLE }
   : undefined;
 
+// Specs run the real web app with /api mocked by tests/fixtures.ts.
 export default defineConfig({
   testDir: './tests',
+  testMatch: '**/*.spec.ts',
   use: {
-    baseURL: process.env.FATHOM_CLONE_VERIFY_URL || 'http://127.0.0.1:5173',
-    trace: process.env.FATHOM_CLONE_VERIFY_URL ? 'off' : 'retain-on-failure',
+    baseURL: 'http://127.0.0.1:5173',
+    trace: 'retain-on-failure',
   },
   projects: [
     {
@@ -28,11 +30,9 @@ export default defineConfig({
       },
     },
   ],
-  webServer: process.env.FATHOM_CLONE_VERIFY_URL
-    ? undefined
-    : {
-        command: 'npm run dev:web',
-        url: 'http://127.0.0.1:5173',
-        reuseExistingServer: !process.env.CI,
-      },
+  webServer: {
+    command: 'npm run dev:web',
+    url: 'http://127.0.0.1:5173',
+    reuseExistingServer: !process.env.CI,
+  },
 });

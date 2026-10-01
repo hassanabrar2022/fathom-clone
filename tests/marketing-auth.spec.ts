@@ -1,4 +1,7 @@
-import { expect, test } from './fixtures';
+import { expect, test, user } from './fixtures';
+
+// These flows start signed out; individual tests mock the auth responses.
+test.use({ signedIn: false });
 
 const viewports = [
   { width: 1920, height: 1080 },
@@ -196,32 +199,15 @@ test('dark secondary button stays legible on hover', async ({ page }) => {
 test('immediate signup enters the existing dashboard when confirmation is disabled', async ({
   page,
 }) => {
-  const user = {
-    id: '77777777-7777-4777-8777-777777777777',
-    email: 'new-person@example.com',
-  };
-  let signed = false;
-  await page.route('**/api/auth/**', (route) => {
-    const path = new URL(route.request().url()).pathname;
-    if (path.endsWith('/session'))
-      return route.fulfill({ json: { user: signed ? user : null } });
-    if (path.endsWith('/signup')) {
-      signed = true;
-      return route.fulfill({ json: { user } });
-    }
-    return route.fallback();
-  });
   await page.goto('/signup');
-  await page.getByLabel('Email address').fill(user.email);
+  await page.getByLabel('Email address').fill('new-person@example.com');
   await page.getByLabel('Password', { exact: true }).fill('secure-passphrase');
   await page.getByRole('button', { name: 'Get started free' }).click();
   await expect(page).toHaveURL(/\/app$/);
   await expect(
     page.getByRole('heading', { name: 'Your conversations. All connected.' }),
   ).toBeVisible();
-  if (page.viewportSize()!.width <= 600)
-    await expect(page.getByText('Account workspace')).toBeVisible();
-  else await expect(page.getByText(user.email)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign out' }).first()).toBeVisible();
 });
 
 test('signup waits for actual confirmation; errors and password visibility are usable', async ({
@@ -252,28 +238,9 @@ test('signup waits for actual confirmation; errors and password visibility are u
   await expect(page).toHaveURL(/\/login$/);
 });
 
-test('confirmed login enters existing app and sign-out returns to the public site', async ({
+test('confirmed login enters the app and sign-out closes the workspace', async ({
   page,
 }) => {
-  const user = {
-    id: '77777777-7777-4777-8777-777777777777',
-    email: 'person@example.com',
-  };
-  let signed = false;
-  await page.route('**/api/auth/**', (route) => {
-    const path = new URL(route.request().url()).pathname;
-    if (path.endsWith('/session'))
-      return route.fulfill({ json: { user: signed ? user : null } });
-    if (path.endsWith('/login')) {
-      signed = true;
-      return route.fulfill({ json: { user } });
-    }
-    if (path.endsWith('/logout')) {
-      signed = false;
-      return route.fulfill({ json: { signedOut: true } });
-    }
-    return route.fallback();
-  });
   await page.goto('/login');
   await expect(
     page.getByRole('heading', { name: 'Pick up where the meeting left off.' }),
@@ -289,46 +256,25 @@ test('confirmed login enters existing app and sign-out returns to the public sit
   await expect(
     page.getByRole('heading', { name: 'Your conversations. All connected.' }),
   ).toBeVisible();
-  if (page.viewportSize()!.width <= 600)
-    await expect(page.getByText('Account workspace')).toBeVisible();
-  else await expect(page.getByText(user.email)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign out' }).first()).toBeVisible();
   await page.goto('/signup');
   await expect(page).toHaveURL(/\/app$/);
-  await page.getByRole('button', { name: 'Sign out' }).click();
-  await expect(page).toHaveURL(/\/$/);
-  await expect(
-    page.getByRole('heading', {
-      name: /Every meeting.*leaves something worth keeping/,
-    }),
-  ).toBeVisible();
+  await page.locator('.sidebar-signout').click();
+  // Signed out, the workspace is closed until the next sign-in.
+  await expect(page).not.toHaveURL(/\/app/);
+  await page.goto('/app');
+  await expect(page).toHaveURL(/\/login\?next=%2Fapp$/);
 });
 
 test('confirmed email callback establishes a session and clears URL tokens', async ({
   page,
 }) => {
-  const user = {
-    id: '77777777-7777-4777-8777-777777777777',
-    email: 'person@example.com',
-  };
-  let signed = false;
-  await page.route('**/api/auth/**', (route) => {
-    const path = new URL(route.request().url()).pathname;
-    if (path.endsWith('/session'))
-      return route.fulfill({ json: { user: signed ? user : null } });
-    if (path.endsWith('/complete')) {
-      signed = true;
-      return route.fulfill({ json: { user } });
-    }
-    return route.fallback();
-  });
   await page.goto(
     `/auth/confirm#access_token=${'a'.repeat(80)}&refresh_token=${'r'.repeat(12)}&expires_in=3600`,
   );
   await expect(page).toHaveURL(/\/app$/);
   await expect(page).not.toHaveURL(/access_token/);
-  if (page.viewportSize()!.width <= 600)
-    await expect(page.getByText('Account workspace')).toBeVisible();
-  else await expect(page.getByText(user.email)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign out' }).first()).toBeVisible();
 });
 
 test('theme follows system preference, persists override, and carries into auth', async ({
@@ -364,21 +310,6 @@ test('chosen theme follows login into the workspace and survives reload', async 
   page,
 }) => {
   await page.emulateMedia({ colorScheme: 'light' });
-  const user = {
-    id: '77777777-7777-4777-8777-777777777777',
-    email: 'theme@example.com',
-  };
-  let signed = false;
-  await page.route('**/api/auth/**', (route) => {
-    const path = new URL(route.request().url()).pathname;
-    if (path.endsWith('/session'))
-      return route.fulfill({ json: { user: signed ? user : null } });
-    if (path.endsWith('/login')) {
-      signed = true;
-      return route.fulfill({ json: { user } });
-    }
-    return route.fallback();
-  });
   await page.goto('/');
   await page
     .getByRole('button', { name: 'Switch to dark mode' })
@@ -402,7 +333,7 @@ test('chosen theme follows login into the workspace and survives reload', async 
     'background-color',
     'rgb(239, 237, 231)',
   );
-  await page.goto('/app/meetings/recording-walkthrough');
+  await page.goto('/app/settings');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
 
@@ -480,4 +411,81 @@ test('both themes cover the complete public page, including the hero artwork', a
       .locator('.auth-story')
       .evaluate((node) => getComputedStyle(node).backgroundColor),
   ).toBe('rgb(238, 234, 227)');
+});
+
+test('the workspace sends signed-out visitors to sign in and returns them after', async ({
+  page,
+  api,
+}) => {
+  await page.goto(`/app/meetings/${api.meetings[0].id}`);
+  await expect(page).toHaveURL(/\/login\?next=%2Fapp%2Fmeetings%2F/);
+  await page.getByLabel('Email address').fill(user.email);
+  await page.getByLabel('Password', { exact: true }).fill('secure-passphrase');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/app/meetings/${api.meetings[0].id}$`));
+  await expect(page.getByRole('heading', { name: 'Pilot planning' })).toBeVisible();
+});
+
+test('sign-in ignores a destination outside the workspace', async ({ page }) => {
+  await page.goto('/login?next=https://evil.example/app');
+  await page.getByLabel('Email address').fill(user.email);
+  await page.getByLabel('Password', { exact: true }).fill('secure-passphrase');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL(/127\.0\.0\.1:5173\/app$/);
+});
+
+test('forgot password sends a reset link without revealing accounts', async ({
+  page,
+  api,
+}) => {
+  await page.goto('/login');
+  await page.getByRole('link', { name: 'Forgot password?' }).click();
+  await expect(page).toHaveURL(/\/forgot-password$/);
+  await page.getByRole('button', { name: 'Send reset link' }).click();
+  await expect(page.getByRole('alert')).toContainText('valid email');
+  await page.getByLabel('Email address').fill('someone@example.com');
+  await page.getByRole('button', { name: 'Send reset link' }).click();
+  await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
+  await expect(page.getByText('If someone@example.com has an account')).toBeVisible();
+  expect(api.calls.find((call) => call.path === '/api/auth/recover')?.body).toEqual({
+    email: 'someone@example.com',
+  });
+});
+
+test('a reset link signs in, then saves a matching new password', async ({
+  page,
+  api,
+}) => {
+  await page.goto(
+    `/auth/reset#access_token=${'a'.repeat(80)}&refresh_token=${'r'.repeat(12)}&type=recovery`,
+  );
+  await expect(page).toHaveURL(/\/auth\/reset$/);
+  await expect(page.getByRole('heading', { name: 'Choose a new password.' })).toBeVisible();
+  await page.getByLabel('New password', { exact: true }).fill('a new passphrase');
+  await page.getByLabel('Confirm new password').fill('something else');
+  await page.getByRole('button', { name: 'Save new password' }).click();
+  await expect(page.getByRole('alert')).toContainText('don’t match');
+  await page.getByLabel('Confirm new password').fill('a new passphrase');
+  await page.getByRole('button', { name: 'Save new password' }).click();
+  await expect(page).toHaveURL(/\/app$/);
+  expect(api.calls.find((call) => call.path === '/api/auth/recovery')?.body).toEqual({
+    access_token: 'a'.repeat(80),
+    refresh_token: 'r'.repeat(12),
+  });
+  expect(api.calls.find((call) => call.path === '/api/auth/password')?.body).toEqual({
+    password: 'a new passphrase',
+  });
+});
+
+test('an expired or incomplete reset link offers a new one', async ({ page }) => {
+  await page.goto('/auth/reset');
+  await expect(page.getByRole('heading', { name: 'Link expired' })).toBeVisible();
+  await page.getByRole('link', { name: 'Request a new link' }).click();
+  await expect(page).toHaveURL(/\/forgot-password$/);
+
+  await page.route('**/api/auth/recovery', (route) =>
+    route.fulfill({ status: 400, json: { message: 'This link has expired.' } }),
+  );
+  await page.goto(`/auth/reset#access_token=${'a'.repeat(80)}&refresh_token=${'r'.repeat(12)}`);
+  await expect(page.getByRole('heading', { name: 'Link expired' })).toBeVisible();
 });

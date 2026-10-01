@@ -1,224 +1,268 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ingestionApi } from '../../apps/worker/src/ingestion';
+import { verifiedUserHeader } from '../../apps/worker/src/database';
 import {
-  ingestionApi,
-  type IngestionEnv,
-} from '../../apps/worker/src/ingestion';
+  apiRequest,
+  createBackend,
+  meetingRow,
+  userA,
+  userB,
+} from '../../tests/support/backend';
 
-const meetingId = '77777777-7777-4777-8777-777777777777';
-const cookie = `__Host-fathom-clone=${'a'.repeat(64)}`;
-const env = {
-  SUPABASE_URL: 'https://database.example',
-  SUPABASE_SERVICE_ROLE_KEY: 'test-service',
-  R2_ACCOUNT_ID: 'test',
-  R2_BUCKET_NAME: 'test',
-  R2_ACCESS_KEY_ID: 'test',
-  R2_SECRET_ACCESS_KEY: 'test',
-  AI: { run: vi.fn() },
-} satisfies IngestionEnv;
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
-afterEach(() => vi.unstubAllGlobals());
+const mineId = '11111111-1111-4111-8111-111111111111';
+const theirsId = '22222222-2222-4222-8222-222222222222';
+const momentId = '33333333-3333-4333-8333-333333333333';
+const media = {
+  [`uploads/${mineId}/media`]: {
+    body: new Uint8Array([1, 2, 3, 4]),
+    type: 'video/webm',
+  },
+};
 
-describe('full meeting share API', () => {
-  it('publishes only after an owner acts, supports byte-range media, and revokes both data and playback', async () => {
-    const row = {
-      id: meetingId,
-      title: 'Fictional planning call',
-      original_filename: 'private.webm',
-      media_type: 'video/webm',
-      media_size: 4,
-      duration_seconds: 32,
-      status: 'complete',
-      processing_progress: 100,
-      processing_error: null,
-      created_at: '2026-09-14T12:00:00Z',
-      transcript: [
-        {
-          id: 'segment-1',
-          speakerId: 'speaker',
-          start: 2,
-          end: 6,
-          paragraphs: ['We will review the plan.'],
-        },
-      ],
-      intelligence: null,
-      owner_hash: 'b'.repeat(64),
-      storage_key: 'uploads/private-key',
-      processing_lease: null,
-      processing_started_at: null,
-      processing_attempts: 0,
-      media_uploaded_at: '2026-09-14T12:00:00Z',
-    };
-    let share: { meeting_id: string; token: string; enabled: boolean } | null =
-      null;
-    const storageRanges: string[] = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: string | Request, init?: RequestInit) => {
-        const address = new URL(typeof input === 'string' ? input : input.url);
-        const method = init?.method ?? 'GET';
-        if (address.origin === env.SUPABASE_URL) {
-          if (address.pathname.endsWith('/reviewer_meeting_shares')) return Response.json([]);
-          if (address.pathname.endsWith('/uploaded_meetings'))
-            return Response.json([row]);
-          if (address.pathname.endsWith('/uploaded_meeting_shares')) {
-            if (method === 'POST')
-              share = JSON.parse(String(init?.body)) as typeof share;
-            if (method === 'PATCH')
-              share = { ...share!, ...JSON.parse(String(init?.body)) };
-            const token = address.searchParams.get('token')?.slice(3);
-            const enabled = address.searchParams.get('enabled');
-            return Response.json(
-              share &&
-                (!token || token === share.token) &&
-                (!enabled || share.enabled)
-                ? [share]
-                : [],
-            );
-          }
-        }
-        const range =
-          new Headers(init?.headers).get('Range') ||
-          (input instanceof Request ? input.headers.get('Range') : null);
-        if (range) storageRanges.push(range);
-        return new Response(new Uint8Array([1, 2]), {
-          status: range ? 206 : 200,
-          headers: range
-            ? { 'Content-Range': 'bytes 0-1/4', 'Content-Length': '2' }
-            : { 'Content-Length': '2' },
-        });
+function setup(options: Parameters<typeof createBackend>[0] = {}) {
+  const backend = createBackend({
+    meetings: [
+      meetingRow({ id: mineId, speaker_names: { speaker: 'Jordan' } }),
+      meetingRow({
+        id: theirsId,
+        user_id: userB.id,
+        title: 'Private planning',
+        transcript: [
+          {
+            id: 'segment-1',
+            speakerId: 'speaker',
+            start: 0,
+            end: 5,
+            paragraphs: ['We will send the revised proposal by Friday.'],
+          },
+        ],
       }),
-    );
-    const ownerRequest = (method: string) =>
-      new Request(`https://app.example/api/uploads/${meetingId}/share`, {
-        method,
-        headers: {
-          Cookie: cookie,
-          ...(method === 'GET'
-            ? {}
-            : {
-                Origin: 'https://app.example',
-                'Content-Type': 'application/json',
-              }),
-        },
-      });
+    ],
+    objects: media,
+    ...options,
+  });
+  vi.stubGlobal('fetch', backend.fetch);
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  return backend;
+}
+function as(
+  user: { id: string } | null,
+  path: string,
+  init: Parameters<typeof apiRequest>[1] = {},
+) {
+  return apiRequest(path, {
+    ...init,
+    headers: { ...init.headers, ...(user ? { [verifiedUserHeader]: user.id } : {}) },
+  });
+}
+const call = async (backend: ReturnType<typeof setup>, request: Request) => {
+  const response = await ingestionApi(request, backend.env);
+  return { status: response.status, body: await response.json().catch(() => null) };
+};
 
-    const unshared = await ingestionApi(ownerRequest('GET'), env);
-    expect(await unshared.json()).toEqual({ path: null });
-    const created = await ingestionApi(ownerRequest('POST'), env);
-    expect(created.status).toBe(201);
-    const { path } = (await created.json()) as { path: string };
-    expect(path).toMatch(/^\/share\/meeting-[a-f0-9]{64}$/);
-    const token = path.slice('/share/meeting-'.length);
-    const visitor = await ingestionApi(
-      new Request(`https://app.example/api/shares/${token}`),
-      env,
-    );
-    expect(visitor.status).toBe(200);
-    const payload = await visitor.json();
-    expect(payload).toMatchObject({
-      title: row.title,
-      mediaUrl: `/api/shares/${token}/media`,
-      segments: row.transcript,
+describe('full meeting links', () => {
+  it('publishes only when the owner asks, and revoking stops data and playback', async () => {
+    const backend = setup();
+    expect(await call(backend, as(userA, `/api/uploads/${mineId}/share`))).toEqual({
+      status: 200,
+      body: { path: null },
     });
-    expect(JSON.stringify(payload)).not.toContain(row.storage_key);
-    expect(JSON.stringify(payload)).not.toContain(row.owner_hash);
-    expect(JSON.stringify(payload)).not.toContain(row.original_filename);
-
-    const media = await ingestionApi(
-      new Request(`https://app.example/api/shares/${token}/media`, {
-        headers: { Range: 'bytes=0-1' },
-      }),
-      env,
+    const created = await call(
+      backend,
+      as(userA, `/api/uploads/${mineId}/share`, { method: 'POST' }),
     );
-    expect(media.status).toBe(206);
-    expect(media.headers.get('Content-Range')).toBe('bytes 0-1/4');
-    expect(media.headers.get('Cache-Control')).toContain('no-store');
-    expect(storageRanges).toEqual(['bytes=0-1']);
+    expect(created.status).toBe(201);
+    const token = /meeting-([a-f0-9]{64})$/.exec(created.body.path)![1];
+    const again = await call(
+      backend,
+      as(userA, `/api/uploads/${mineId}/share`, { method: 'POST' }),
+    );
+    expect(again.body.path).toBe(created.body.path);
 
-    const revoked = await ingestionApi(ownerRequest('DELETE'), env);
-    expect(await revoked.json()).toEqual({ path: null });
+    const shared = await call(backend, as(null, `/api/shares/${token}`));
+    expect(shared.body).toMatchObject({
+      title: 'Weekly sync',
+      mediaUrl: `/api/shares/${token}/media`,
+      speakers: [{ id: 'speaker', name: 'Jordan' }],
+    });
+    expect(JSON.stringify(shared.body)).not.toMatch(/user_id|storage_key|uploads\//);
+    const playback = await ingestionApi(
+      as(null, `/api/shares/${token}/media`, { headers: { Range: 'bytes=0-1' } }),
+      backend.env,
+    );
+    expect(playback.status).toBe(206);
+
+    await call(backend, as(userA, `/api/uploads/${mineId}/share`, { method: 'DELETE' }));
+    expect((await call(backend, as(null, `/api/shares/${token}`))).status).toBe(404);
     expect(
-      (
-        await ingestionApi(
-          new Request(`https://app.example/api/shares/${token}`),
-          env,
-        )
-      ).status,
+      (await ingestionApi(as(null, `/api/shares/${token}/media`), backend.env)).status,
     ).toBe(404);
-    expect(
-      (
-        await ingestionApi(
-          new Request(`https://app.example/api/shares/${token}/media`),
-          env,
-        )
-      ).status,
-    ).toBe(404);
-    const reshared = await ingestionApi(ownerRequest('POST'), env);
-    const next = (await reshared.json()) as { path: string };
-    expect(next.path).not.toBe(path);
+
+    const renewed = await call(
+      backend,
+      as(userA, `/api/uploads/${mineId}/share`, { method: 'POST' }),
+    );
+    expect(renewed.body.path).not.toBe(created.body.path);
   });
 
-  it('rejects non-owner writes and cannot share a meeting still processing', async () => {
-    const forbidden = await ingestionApi(
-      new Request(`https://app.example/api/uploads/${meetingId}/share`, {
-        method: 'POST',
-        headers: {
-          Cookie: cookie,
-          Origin: 'https://other.example',
-          'Content-Type': 'application/json',
-        },
-      }),
-      env,
-    );
-    expect(forbidden.status).toBe(403);
-    const visitor = await ingestionApi(
-      new Request(`https://app.example/api/uploads/${meetingId}/share`),
-      env,
-    );
-    expect(visitor.status).toBe(401);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: string | Request) =>
-        Response.json(
-          new URL(
-            typeof input === 'string' ? input : input.url,
-          ).pathname.endsWith('/uploaded_meeting_shares')
-            ? []
-            : [
-                {
-                  id: meetingId,
-                  title: 'Still processing',
-                  media_type: 'video/webm',
-                  media_size: 4,
-                  duration_seconds: 32,
-                  status: 'transcribing',
-                  processing_progress: 60,
-                  processing_error: null,
-                  created_at: '2026-09-14T12:00:00Z',
-                  transcript: null,
-                  intelligence: null,
-                  owner_hash: 'b'.repeat(64),
-                  storage_key: 'uploads/private-key',
-                  processing_lease: null,
-                  processing_started_at: null,
-                  processing_attempts: 0,
-                  media_uploaded_at: '2026-09-14T12:00:00Z',
-                },
-              ],
-        ),
-      ),
-    );
-    const response = await ingestionApi(
-      new Request(`https://app.example/api/uploads/${meetingId}/share`, {
-        method: 'POST',
-        headers: {
-          Cookie: cookie,
-          Origin: 'https://app.example',
-          'Content-Type': 'application/json',
-        },
-      }),
-      env,
+  it('cannot share a meeting that is still processing', async () => {
+    const backend = setup({
+      meetings: [meetingRow({ id: mineId, status: 'transcribing', transcript: null })],
+    });
+    const response = await call(
+      backend,
+      as(userA, `/api/uploads/${mineId}/share`, { method: 'POST' }),
     );
     expect(response.status).toBe(409);
+  });
+});
+
+describe('moments', () => {
+  const moment = {
+    id: momentId,
+    meetingId: mineId,
+    startMs: 1000,
+    endMs: 6000,
+    title: 'The commitment',
+    note: 'Proposal by Friday',
+    createdAt: '2026-09-30T10:10:00.000Z',
+  };
+
+  it('saves private moments and lists them for the owner only', async () => {
+    const backend = setup();
+    const saved = await call(
+      backend,
+      as(userA, `/api/uploads/${mineId}/moments`, { method: 'POST', body: moment }),
+    );
+    expect(saved.status).toBe(201);
+    expect(saved.body).toMatchObject({ id: momentId, title: 'The commitment' });
+    expect(saved.body).not.toHaveProperty('sharePath');
+    const repeat = await call(
+      backend,
+      as(userA, `/api/uploads/${mineId}/moments`, { method: 'POST', body: moment }),
+    );
+    expect(repeat.status).toBe(200);
+    expect(backend.tables.meeting_moments).toHaveLength(1);
+
+    const listed = await call(backend, as(userA, `/api/uploads/${mineId}/moments`));
+    expect(listed.body.map((m: { id: string }) => m.id)).toEqual([momentId]);
+    const stranger = await call(backend, as(userB, `/api/uploads/${mineId}/moments`));
+    expect(stranger.status).toBe(404);
+  });
+
+  it('rejects ranges past the recording or longer than a minute', async () => {
+    const backend = setup();
+    for (const range of [
+      { startMs: 1000, endMs: 31000 + 1000 },
+      { startMs: 0, endMs: 61000 },
+    ]) {
+      const response = await call(
+        backend,
+        as(userA, `/api/uploads/${mineId}/moments`, {
+          method: 'POST',
+          body: { ...moment, ...range },
+        }),
+      );
+      expect(response.status).toBe(400);
+    }
+  });
+
+  it('shares and revokes a moment link that opens only that meeting', async () => {
+    const backend = setup({
+      moments: [
+        {
+          id: momentId,
+          meeting_id: mineId,
+          user_id: userA.id,
+          start_ms: 1000,
+          end_ms: 6000,
+          title: 'The commitment',
+          note: '',
+          share_token: null,
+          created_at: '2026-09-30T10:10:00.000Z',
+        },
+      ],
+    });
+    const shared = await call(
+      backend,
+      as(userA, `/api/uploads/${mineId}/moments/${momentId}/share`, { method: 'POST' }),
+    );
+    const token = /moment-([a-f0-9]{64})$/.exec(shared.body.sharePath)![1];
+
+    const view = await call(backend, as(null, `/api/moments/${token}`));
+    expect(view.body.moment).toMatchObject({ id: momentId, startMs: 1000 });
+    expect(view.body.recording).toMatchObject({
+      title: 'Weekly sync',
+      mediaUrl: `/api/moments/${token}/media`,
+    });
+    const playback = await ingestionApi(as(null, `/api/moments/${token}/media`), backend.env);
+    expect(playback.status).toBe(200);
+
+    const stranger = await call(
+      backend,
+      as(userB, `/api/uploads/${mineId}/moments/${momentId}/share`, { method: 'DELETE' }),
+    );
+    expect(stranger.status).toBe(404);
+
+    const revoked = await call(
+      backend,
+      as(userA, `/api/uploads/${mineId}/moments/${momentId}/share`, { method: 'DELETE' }),
+    );
+    expect(revoked.body).not.toHaveProperty('sharePath');
+    expect((await call(backend, as(null, `/api/moments/${token}`))).status).toBe(404);
+  });
+
+  it('deletes a moment', async () => {
+    const backend = setup({
+      moments: [
+        {
+          id: momentId,
+          meeting_id: mineId,
+          user_id: userA.id,
+          start_ms: 0,
+          end_ms: 1000,
+          title: 'Gone soon',
+          note: '',
+          share_token: null,
+        },
+      ],
+    });
+    const response = await call(
+      backend,
+      as(userA, `/api/uploads/${mineId}/moments/${momentId}`, { method: 'DELETE' }),
+    );
+    expect(response.body).toEqual({ deleted: true });
+    expect(backend.tables.meeting_moments).toEqual([]);
+  });
+});
+
+describe('search', () => {
+  it('searches only the signed-in user’s finished meetings', async () => {
+    const backend = setup();
+    const results = await call(backend, as(userA, '/api/search?q=proposal'));
+    expect(results.body).toHaveLength(1);
+    expect(results.body[0].meeting).toMatchObject({
+      id: mineId,
+      participants: ['Jordan'],
+    });
+    expect(results.body[0].matches[0]).toMatchObject({
+      kind: 'transcript',
+      speaker: 'Jordan',
+      timestamp: 1,
+    });
+    const searchCall = backend.log.find((entry) => entry.url.includes('/meetings?'));
+    expect(searchCall!.url).toContain(`user_id=eq.${userA.id}`);
+    expect(searchCall!.url).toContain('status=eq.complete');
+
+    expect((await call(backend, as(userA, '/api/search?q='))).body).toEqual([]);
+    expect(
+      (await call(backend, as(userA, `/api/search?q=${'x'.repeat(201)}`))).status,
+    ).toBe(400);
+    expect((await call(backend, as(null, '/api/search?q=proposal'))).status).toBe(401);
   });
 });

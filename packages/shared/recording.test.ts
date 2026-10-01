@@ -1,110 +1,63 @@
 import { describe, expect, it } from 'vitest';
-import { fixture } from './reviewer-fixture';
+import { recording } from '../../tests/support/recording-fixture';
 import {
   activeSegment,
   boundedTime,
+  intelligenceSchema,
   momentRange,
   recordingSchema,
 } from './recording';
 
 describe('recording contract and timing', () => {
-  it('validates the actual imported fixture', () => {
-    expect(recordingSchema.safeParse(fixture).success).toBe(true);
+  it('validates a well-formed recording', () => {
+    expect(recordingSchema.safeParse(recording).success).toBe(true);
   });
   it('rejects overlapping turns, unknown speakers and out-of-bounds timestamps', () => {
-    for (const change of [
-      { start: 0 },
-      { speakerId: 'missing' },
-      { end: 999 },
-    ]) {
+    for (const change of [{ start: 0 }, { speakerId: 'missing' }, { end: 999 }]) {
       expect(
         recordingSchema.safeParse({
-          ...fixture,
+          ...recording,
           segments: [
-            fixture.segments[0],
-            { ...fixture.segments[1], ...change },
+            recording.segments[0],
+            { ...recording.segments[1], ...change },
           ],
         }).success,
       ).toBe(false);
     }
   });
-  it('accepts an empty transcript so the recording remains usable', () => {
+  it('accepts an empty transcript and missing analysis so playback stays usable', () => {
     expect(
-      recordingSchema.safeParse({ ...fixture, segments: [] }).success,
+      recordingSchema.safeParse({ ...recording, segments: [], intelligence: null })
+        .success,
     ).toBe(true);
   });
-  it('requires all three distinct summary templates', () => {
+  it('requires exactly three summary templates from a live model', () => {
+    const intelligence = recording.intelligence!;
     expect(
-      recordingSchema.safeParse({
-        ...fixture,
-        intelligence: {
-          ...fixture.intelligence,
-          templates: [
-            fixture.intelligence.templates[0],
-            fixture.intelligence.templates[0],
-            fixture.intelligence.templates[2],
-          ],
-        },
+      intelligenceSchema.safeParse({
+        ...intelligence,
+        templates: intelligence.templates.slice(0, 2),
       }).success,
     ).toBe(false);
     expect(
-      new Set(fixture.intelligence.templates.map((template) => template.title))
-        .size,
-    ).toBe(3);
-  });
-  it('rejects summary and action citations beyond the recording', () => {
-    const general = fixture.intelligence.templates[0];
-    expect(
-      recordingSchema.safeParse({
-        ...fixture,
-        intelligence: {
-          ...fixture.intelligence,
-          templates: [
-            {
-              ...general,
-              sections: [
-                {
-                  ...general.sections[0],
-                  items: [{ ...general.sections[0].items[0], source: 999 }],
-                },
-                general.sections[1],
-              ],
-            },
-            ...fixture.intelligence.templates.slice(1),
-          ],
-        },
-      }).success,
-    ).toBe(false);
-    expect(
-      recordingSchema.safeParse({
-        ...fixture,
-        intelligence: {
-          ...fixture.intelligence,
-          actions: [{ ...fixture.intelligence.actions[0], source: 999 }],
-        },
-      }).success,
+      intelligenceSchema.safeParse({ ...intelligence, provenance: 'prepared-demo' })
+        .success,
     ).toBe(false);
   });
   it('selects the active speaker at exact boundaries and leaves silence unselected', () => {
-    expect(activeSegment(fixture.segments, 0)).toBeNull();
-    expect(activeSegment(fixture.segments, 2.7)).toBe('presenter-turn');
-    expect(activeSegment(fixture.segments, 97.169)).toBe('presenter-turn');
-    expect(activeSegment(fixture.segments, 97.17)).toBe('participant-turn');
-    expect(activeSegment(fixture.segments, 103.8)).toBeNull();
+    expect(activeSegment(recording.segments, 0)).toBeNull();
+    expect(activeSegment(recording.segments, 2)).toBe('host-turn');
+    expect(activeSegment(recording.segments, 29.99)).toBe('host-turn');
+    expect(activeSegment(recording.segments, 30)).toBe('guest-turn');
+    expect(activeSegment(recording.segments, 58)).toBeNull();
   });
   it('clamps seeks to playable bounds', () => {
-    expect(boundedTime(-5, 103.8)).toBe(0);
-    expect(boundedTime(500, 103.8)).toBe(103.8);
-    expect(boundedTime(NaN, 103.8)).toBe(0);
+    expect(boundedTime(-5, 60)).toBe(0);
+    expect(boundedTime(500, 60)).toBe(60);
+    expect(boundedTime(NaN, 60)).toBe(0);
   });
   it('defaults moments to a bounded 30-second range and caps the final moment', () => {
-    expect(momentRange(33, 103.8)).toEqual({
-      startMs: 33000,
-      endMs: 63000,
-    });
-    expect(momentRange(97.17, 103.8)).toEqual({
-      startMs: 97170,
-      endMs: 103800,
-    });
+    expect(momentRange(10, 60)).toEqual({ startMs: 10000, endMs: 40000 });
+    expect(momentRange(50, 60)).toEqual({ startMs: 50000, endMs: 60000 });
   });
 });

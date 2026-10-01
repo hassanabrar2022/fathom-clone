@@ -1,574 +1,391 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ingestionApi } from '../../apps/worker/src/ingestion';
+import { verifiedUserHeader } from '../../apps/worker/src/database';
 import {
-  ingestionApi,
-  type IngestionEnv,
-} from '../../apps/worker/src/ingestion';
+  apiRequest,
+  createBackend,
+  meetingRow,
+  userA,
+  userB,
+} from '../../tests/support/backend';
 
-const env = {
-  SUPABASE_URL: 'https://database.example',
-  SUPABASE_SERVICE_ROLE_KEY: 'test-service',
-  R2_ACCOUNT_ID: 'test',
-  R2_BUCKET_NAME: 'test',
-  R2_ACCESS_KEY_ID: 'test',
-  R2_SECRET_ACCESS_KEY: 'test',
-  AI: { run: vi.fn() },
-} satisfies IngestionEnv;
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
-describe('private ingestion API', () => {
-  it('deletes both stored objects before the owner-scoped row and invalidates its share', async () => {
-    const id = '77777777-7777-4777-8777-777777777777';
-    const token = 'c'.repeat(64);
-    const row = {
-      id,
-      title: 'Private meeting to delete',
-      media_type: 'video/webm',
-      media_size: 4,
-      duration_seconds: 32,
-      status: 'complete',
-      processing_progress: 100,
-      processing_error: null,
-      created_at: '2026-09-14T12:00:00Z',
-      transcript: [],
-      speaker_names: { speaker: 'Jordan' },
-      intelligence: null,
-      owner_hash: 'b'.repeat(64),
-      storage_key: `uploads/${id}`,
-      processing_lease: null,
-      processing_started_at: null,
-      processing_attempts: 0,
-      media_uploaded_at: '2026-09-14T12:00:00Z',
-    };
-    let deleted = false;
-    const operations: string[] = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: string | Request, init?: RequestInit) => {
-        const url = new URL(typeof input === 'string' ? input : input.url);
-        const method =
-          init?.method ?? (input instanceof Request ? input.method : 'GET');
-        if (url.origin === env.SUPABASE_URL) {
-          if (url.pathname.endsWith('/reviewer_meeting_shares'))
-            return Response.json([]);
-          if (url.pathname.endsWith('/uploaded_meeting_shares'))
-            return Response.json(
-              deleted ? [] : [{ meeting_id: id, token, enabled: true }],
-            );
-          if (method === 'DELETE') {
-            operations.push('database');
-            deleted = true;
-            return Response.json([row]);
-          }
-          return Response.json(deleted ? [] : [row]);
-        }
-        if (method === 'DELETE') {
-          operations.push(url.pathname.split('/').at(-1) ?? '');
-          return new Response(null, { status: 204 });
-        }
-        return new Response(null, { status: 404 });
-      }),
-    );
-    const response = await ingestionApi(
-      new Request(`https://app.example/api/uploads/${id}`, {
-        method: 'DELETE',
-        headers: {
-          Cookie: `__Host-fathom-clone=${'a'.repeat(64)}`,
-          Origin: 'https://app.example',
-          'Content-Type': 'application/json',
-        },
-        body: '{}',
-      }),
-      env,
-    );
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ deleted: true });
-    expect(new Set(operations.slice(0, 4))).toEqual(
-      new Set(['staging', 'media', 'audio-staging', 'audio-media']),
-    );
-    expect(operations[4]).toBe('database');
-    const calls = vi.mocked(fetch).mock.calls;
-    const databaseDelete = calls.find(
-      ([input, init]) =>
-        String(input).includes('/uploaded_meetings?') &&
-        init?.method === 'DELETE',
-    );
-    expect(String(databaseDelete?.[0])).toMatch(/owner_hash=eq\.[a-f0-9]{64}$/);
-    expect(String(databaseDelete?.[0])).not.toContain('a'.repeat(64));
-    expect(
-      (
-        await ingestionApi(
-          new Request(`https://app.example/api/shares/${token}`),
-          env,
-        )
-      ).status,
-    ).toBe(404);
+const mineId = '11111111-1111-4111-8111-111111111111';
+const theirsId = '22222222-2222-4222-8222-222222222222';
+
+function setup(options: Parameters<typeof createBackend>[0] = {}) {
+  const backend = createBackend({
+    meetings: [
+      meetingRow({ id: mineId }),
+      meetingRow({ id: theirsId, user_id: userB.id, title: 'Not yours' }),
+    ],
+    ...options,
+  });
+  vi.stubGlobal('fetch', backend.fetch);
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  return backend;
+}
+/** The auth layer has already verified the session and set this header. */
+function as(
+  user: { id: string } | null,
+  path: string,
+  init: Parameters<typeof apiRequest>[1] = {},
+) {
+  return apiRequest(path, {
+    ...init,
+    headers: { ...init.headers, ...(user ? { [verifiedUserHeader]: user.id } : {}) },
+  });
+}
+
+describe('uploads API ownership', () => {
+  it('requires a signed-in user', async () => {
+    const backend = setup();
+    const response = await ingestionApi(as(null, '/api/uploads'), backend.env);
+    expect(response.status).toBe(401);
+    expect(backend.log).toEqual([]);
   });
 
-  it('keeps database content when R2 cleanup fails and exposes no storage key', async () => {
-    const id = '77777777-7777-4777-8777-777777777777';
-    const row = {
-      id,
-      title: 'Private meeting to preserve',
-      media_type: 'video/webm',
-      media_size: 4,
-      duration_seconds: 32,
-      status: 'complete',
-      processing_progress: 100,
-      processing_error: null,
-      created_at: '2026-09-14T12:00:00Z',
-      transcript: [],
-      speaker_names: {},
-      intelligence: null,
-      owner_hash: 'b'.repeat(64),
-      storage_key: `uploads/${id}`,
-      processing_lease: null,
-      processing_started_at: null,
-      processing_attempts: 0,
-      media_uploaded_at: '2026-09-14T12:00:00Z',
-    };
-    let databaseDeletes = 0;
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: string | Request, init?: RequestInit) => {
-        const url = new URL(typeof input === 'string' ? input : input.url);
-        if (url.origin === env.SUPABASE_URL) {
-          if (init?.method === 'DELETE') databaseDeletes += 1;
-          return Response.json([row]);
-        }
-        return new Response(null, { status: 503 });
-      }),
-    );
-    const response = await ingestionApi(
-      new Request(`https://app.example/api/uploads/${id}`, {
-        method: 'DELETE',
-        headers: {
-          Cookie: `__Host-fathom-clone=${'a'.repeat(64)}`,
-          Origin: 'https://app.example',
-          'Content-Type': 'application/json',
-        },
-        body: '{}',
-      }),
-      env,
-    );
-    expect(response.status).toBe(503);
-    const body = await response.text();
-    expect(body).toContain('Nothing else was deleted');
-    expect(body).not.toContain(row.storage_key);
-    expect(databaseDeletes).toBe(0);
+  it('lists only the signed-in user’s meetings, without transcript bodies', async () => {
+    const backend = setup();
+    const response = await ingestionApi(as(userA, '/api/uploads'), backend.env);
+    const list = (await response.json()) as { id: string; transcript: unknown }[];
+    expect(list.map((item) => item.id)).toEqual([mineId]);
+    expect(list[0].transcript).toBeNull();
+    expect(backend.log[0].url).toContain(`user_id=eq.${userA.id}`);
   });
 
-  it('stores speaker labels separately, scopes writes to the owner, and includes labels in an existing share', async () => {
-    const id = '77777777-7777-4777-8777-777777777777';
-    const token = 'c'.repeat(64);
-    const originalTranscript = [
-      {
-        id: 'one',
-        speakerId: 'speaker',
-        start: 2,
-        end: 6,
-        paragraphs: ['Review the plan.'],
-      },
-      {
-        id: 'two',
-        speakerId: 'speaker',
-        start: 8,
-        end: 12,
-        paragraphs: ['Agree on a date.'],
-      },
-    ];
-    let row: Record<string, unknown> = {
-      id,
-      title: 'Planning call',
-      media_type: 'video/webm',
-      media_size: 4,
-      duration_seconds: 32,
-      status: 'complete',
-      processing_progress: 100,
-      processing_error: null,
-      created_at: '2026-09-14T12:00:00Z',
-      transcript: originalTranscript,
-      speaker_names: {},
-      intelligence: null,
-      owner_hash: 'b'.repeat(64),
-      storage_key: 'uploads/private',
-      processing_lease: null,
-      processing_started_at: null,
-      processing_attempts: 0,
-      media_uploaded_at: '2026-09-14T12:00:00Z',
-    };
-    const fetcher = vi.fn(
-      async (input: string | Request, init?: RequestInit) => {
-        const url = new URL(typeof input === 'string' ? input : input.url);
-        if (url.pathname.endsWith('/reviewer_meeting_shares'))
-          return Response.json([]);
-        if (url.pathname.endsWith('/uploaded_meeting_shares'))
-          return Response.json([{ meeting_id: id, token, enabled: true }]);
-        if (init?.method === 'PATCH')
-          row = { ...row, ...JSON.parse(String(init.body)) };
-        return Response.json([row]);
-      },
-    );
-    vi.stubGlobal('fetch', fetcher);
-    const rename = (name: string, speakerId = 'speaker') =>
-      new Request(`https://app.example/api/uploads/${id}/speakers`, {
-        method: 'PATCH',
-        headers: {
-          Cookie: `__Host-fathom-clone=${'a'.repeat(64)}`,
-          Origin: 'https://app.example',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ speakerId, name }),
-      });
-    expect((await ingestionApi(rename('Jordan', 'unknown'), env)).status).toBe(
-      404,
-    );
-    expect((await ingestionApi(rename('   '), env)).status).toBe(400);
-    const saved = await ingestionApi(rename('Jordan'), env);
-    expect(saved.status).toBe(200);
-    expect((await saved.json()) as object).toMatchObject({
-      speaker_names: { speaker: 'Jordan' },
-      transcript: originalTranscript,
-    });
-    expect(row.transcript).toEqual(originalTranscript);
-    const privateCalls = fetcher.mock.calls
-      .map(([input]) => String(input))
-      .filter((url) => url.includes('/uploaded_meetings?'));
-    expect(
-      privateCalls.every((url) => /owner_hash=eq\.[a-f0-9]{64}/.test(url)),
-    ).toBe(true);
-    expect(privateCalls.every((url) => !url.includes('a'.repeat(64)))).toBe(
-      true,
-    );
-    const shared = await ingestionApi(
-      new Request(`https://app.example/api/shares/${token}`),
-      env,
-    );
-    expect((await shared.json()) as object).toMatchObject({
-      speakers: [{ id: 'speaker', name: 'Jordan' }],
-    });
-    expect(
-      (
-        await ingestionApi(
-          new Request(`https://app.example/api/uploads/${id}/speakers`, {
-            method: 'PATCH',
-            headers: {
-              Origin: 'https://app.example',
-              'Content-Type': 'application/json',
-            },
-            body: '{}',
-          }),
-          env,
-        )
-      ).status,
-    ).toBe(401);
-  });
-  it('persists transcription before analysis and retries only the failed analysis step', async () => {
-    let row: Record<string, unknown> = {
-      id: '77777777-7777-4777-8777-777777777777',
-      title: 'Test conversation',
-      media_type: 'video/webm',
-      media_size: 4,
-      duration_seconds: 104,
-      status: 'uploaded',
-      processing_progress: 30,
-      processing_error: null,
-      created_at: '2026-09-14T12:00:00Z',
-      transcript: null,
-      intelligence: null,
-      owner_hash: 'b'.repeat(64),
-      storage_key: 'uploads/test',
-      processing_lease: null,
-      processing_started_at: null,
-      processing_attempts: 0,
-      media_uploaded_at: '2026-09-14T12:00:00Z',
-    };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: string | Request, init?: RequestInit) => {
-        const url = typeof input === 'string' ? input : input.url;
-        if (url.startsWith(env.SUPABASE_URL)) {
-          if (init?.method === 'PATCH')
-            row = { ...row, ...JSON.parse(String(init.body)) };
-          return Response.json([row]);
-        }
-        return new Response(new Uint8Array([1, 2, 3, 4]), {
-          headers: { 'Content-Length': '4' },
-        });
-      }),
-    );
-    let analysisFails = true;
-    let successfulAnalysisCalls = 0;
-    const run = vi.fn(async (model: string) => {
-      if (model.includes('whisper'))
-        return {
-          text: 'We will review the plan.',
-          segments: [{ start: 2.7, end: 8, text: 'We will review the plan.' }],
-        };
-      expect(row.transcript).not.toBeNull();
-      expect(row.status).toBe('analyzing');
-      if (analysisFails) throw new Error('Provider failure');
-      successfulAnalysisCalls++;
-      return {
-        response: {
-          actions: [],
-          ...Object.fromEntries(
-            ['general', 'sales_customer', 'recruiting_interview'].map((key) => [
-              key,
-              {
-                title: 'Plan review',
-                overview:
-                  successfulAnalysisCalls === 1
-                    ? 'This view is inapplicable.'
-                    : {
-                        general: 'A plan review was discussed.',
-                        sales_customer:
-                          'No customer needs or commercial commitments were discussed.',
-                        recruiting_interview:
-                          'No candidate or hiring evidence was discussed.',
-                      }[key],
-                sections: ['Discussion', 'Next step'].map((title) => ({
-                  title,
-                  items:
-                    key === 'recruiting_interview'
-                      ? []
-                      : [{ text: 'Review the plan.', source: 2.7 }],
-                })),
-              },
-            ]),
-          ),
-        },
-      };
-    });
-    const request = () =>
-      new Request(
-        'https://app.example/api/uploads/77777777-7777-4777-8777-777777777777/process',
-        {
-          method: 'POST',
-          headers: {
-            Cookie: `__Host-fathom-clone=${'a'.repeat(64)}`,
-            Origin: 'https://app.example',
-            'Content-Type': 'application/json',
-          },
-          body: '{}',
-        },
+  it('treats another user’s meeting as missing for every action', async () => {
+    const backend = setup();
+    for (const [method, suffix] of [
+      ['GET', ''],
+      ['DELETE', ''],
+      ['POST', '/process'],
+      ['GET', '/media'],
+      ['POST', '/share'],
+      ['PATCH', '/speakers'],
+    ]) {
+      const response = await ingestionApi(
+        as(userA, `/api/uploads/${theirsId}${suffix}`, {
+          method,
+          body: { speakerId: 'speaker', name: 'Eve' },
+        }),
+        backend.env,
       );
-    const failed = await ingestionApi(request(), { ...env, AI: { run } });
-    const result = (await failed.json()) as {
-      status: string;
-      processing_error: string;
-      transcript: unknown[];
-    };
-    expect(result.status).toBe('failed');
-    expect(result.processing_error).toBe('analysis_failed');
-    expect(result.transcript).toHaveLength(1);
-    analysisFails = false;
-    const recovered = await ingestionApi(request(), { ...env, AI: { run } });
-    expect(((await recovered.json()) as { status: string }).status).toBe(
-      'complete',
-    );
-    expect(successfulAnalysisCalls).toBe(2);
-    expect(
-      run.mock.calls.filter(([model]) => model.includes('whisper')),
-    ).toHaveLength(1);
+      expect(response.status, `${method} ${suffix}`).toBe(404);
+    }
+    expect(backend.tables.meetings).toHaveLength(2);
+    expect(backend.env.PROCESS_MEETING.create).not.toHaveBeenCalled();
+    expect(backend.tables.meeting_shares).toEqual([]);
   });
 
-  it('transcribes long audio in bounded ranges and keeps source timestamps across chunks', async () => {
-    const id = '77777777-7777-4777-8777-777777777777';
-    const audioSize = 44 + 121 * 16000 * 2;
-    const header = new Uint8Array(44);
-    const view = new DataView(header.buffer);
-    for (const [offset, word] of [
-      [0, 'RIFF'],
-      [8, 'WAVE'],
-      [12, 'fmt '],
-      [36, 'data'],
-    ] as const) {
-      for (let index = 0; index < word.length; index++)
-        view.setUint8(offset + index, word.charCodeAt(index));
-    }
-    view.setUint16(20, 1, true);
-    view.setUint16(22, 1, true);
-    view.setUint32(24, 16000, true);
-    view.setUint16(34, 16, true);
-    view.setUint32(40, audioSize - 44, true);
-    let row: Record<string, unknown> = {
-      id,
-      title: 'Long meeting',
-      media_type: 'video/webm',
-      media_size: 8,
-      duration_seconds: 121,
-      status: 'transcribing',
-      processing_progress: 35,
-      processing_error: null,
-      created_at: '2026-09-14T12:00:00Z',
-      transcript: null,
-      speaker_names: {},
-      intelligence: null,
-      owner_hash: 'b'.repeat(64),
-      storage_key: 'uploads/test',
-      processing_lease: null,
-      processing_started_at: null,
-      processing_attempts: 0,
-      media_uploaded_at: '2026-09-14T12:00:00Z',
-    };
-    const ranges: string[] = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: string | Request, init?: RequestInit) => {
-        const url = new URL(typeof input === 'string' ? input : input.url);
-        const method =
-          init?.method ?? (input instanceof Request ? input.method : 'GET');
-        if (url.origin === env.SUPABASE_URL) {
-          if (method === 'PATCH')
-            row = { ...row, ...JSON.parse(String(init?.body)) };
-          return Response.json([row]);
-        }
-        if (url.pathname.endsWith('/audio-staging'))
-          return new Response(null, { status: 404 });
-        const range =
-          input instanceof Request
-            ? input.headers.get('Range')
-            : new Headers(init?.headers).get('Range');
-        if (method === 'HEAD')
-          return new Response(null, {
-            headers: {
-              'Content-Length': String(audioSize),
-              'Content-Type': 'audio/wav',
-            },
-          });
-        if (!range) throw new Error('The full recording must not be buffered');
-        ranges.push(range);
-        if (range === 'bytes=0-43')
-          return new Response(header, { status: 206 });
-        const [, start, end] = /^bytes=(\d+)-(\d+)$/.exec(range) ?? [];
-        return new Response(new Uint8Array(Number(end) - Number(start) + 1), {
-          status: 206,
-        });
-      }),
+  it('does not expose provider errors or credentials when storage fails', async () => {
+    const backend = setup();
+    backend.state.failTable = 'meetings';
+    const response = await ingestionApi(as(userA, '/api/uploads'), backend.env);
+    expect(response.status).toBe(503);
+    const text = await response.text();
+    expect(text).not.toContain('boom');
+    expect(text).not.toContain(backend.env.SUPABASE_SERVICE_ROLE_KEY);
+  });
+});
+
+describe('creating uploads', () => {
+  const input = {
+    title: 'Customer call',
+    filename: 'call.webm',
+    contentType: 'video/webm',
+    size: 1024,
+    duration: 90,
+  };
+
+  it('reserves the upload for the signed-in user', async () => {
+    const backend = setup();
+    const response = await ingestionApi(
+      as(userA, '/api/uploads', { method: 'POST', body: input }),
+      backend.env,
     );
-    const run = vi.fn(async (model: string) => {
-      if (!model.includes('whisper')) throw new Error('Analysis unavailable');
-      return {
-        text: 'Review the plan.',
-        segments: [{ start: 0, end: 1, text: 'Review the plan.' }],
-      };
+    expect(response.status).toBe(201);
+    const created = (await response.json()) as Record<string, unknown>;
+    expect(created).toMatchObject({ title: 'Customer call', status: 'uploading' });
+    expect(created).not.toHaveProperty('storage_key');
+    expect(created).not.toHaveProperty('user_id');
+    expect(backend.log[0].body).toMatchObject({ p_user: userA.id });
+  });
+
+  it.each([
+    ['daily_upload_limit', /today’s upload limit/],
+    ['too_many_in_progress', /still processing/],
+  ])('maps the %s allowance to a 429', async (error, message) => {
+    const backend = setup();
+    backend.state.reserveError = error;
+    const response = await ingestionApi(
+      as(userA, '/api/uploads', { method: 'POST', body: input }),
+      backend.env,
+    );
+    expect(response.status).toBe(429);
+    expect((await response.json()).message).toMatch(message);
+  });
+
+  it('rejects recordings over the size or duration limit', async () => {
+    const backend = setup();
+    for (const change of [{ size: 30 * 1024 * 1024 }, { duration: 601 }]) {
+      const response = await ingestionApi(
+        as(userA, '/api/uploads', { method: 'POST', body: { ...input, ...change } }),
+        backend.env,
+      );
+      expect(response.status).toBe(400);
+    }
+    expect(backend.log).toEqual([]);
+  });
+
+  it('signs uploads into staging, and audio only for long recordings', async () => {
+    const shortId = '33333333-3333-4333-8333-333333333333';
+    const longId = '44444444-4444-4444-8444-444444444444';
+    const backend = setup({
+      meetings: [
+        meetingRow({ id: mineId }),
+        meetingRow({
+          id: shortId,
+          status: 'uploading',
+          processing_progress: 0,
+          media_uploaded_at: null,
+          transcript: null,
+        }),
+        meetingRow({
+          id: longId,
+          status: 'uploading',
+          duration_seconds: 300,
+          processing_progress: 0,
+          media_uploaded_at: null,
+          transcript: null,
+        }),
+      ],
+    });
+    const media = await ingestionApi(
+      as(userA, `/api/uploads/${shortId}/upload-url`, { method: 'POST' }),
+      backend.env,
+    );
+    const { url } = (await media.json()) as { url: string };
+    expect(new URL(url).pathname).toBe(`/bucket/staging/${shortId}/media`);
+    expect(new URL(url).searchParams.get('X-Amz-Expires')).toBe('300');
+
+    const shortAudio = await ingestionApi(
+      as(userA, `/api/uploads/${shortId}/upload-url?audio=1`, { method: 'POST' }),
+      backend.env,
+    );
+    expect(shortAudio.status).toBe(409);
+    const longAudio = await ingestionApi(
+      as(userA, `/api/uploads/${longId}/upload-url?audio=1`, { method: 'POST' }),
+      backend.env,
+    );
+    expect(new URL(((await longAudio.json()) as { url: string }).url).pathname).toBe(
+      `/bucket/staging/${longId}/audio`,
+    );
+
+    const done = await ingestionApi(
+      as(userA, `/api/uploads/${mineId}/upload-url`, { method: 'POST' }),
+      backend.env,
+    );
+    expect(done.status).toBe(409);
+  });
+});
+
+describe('deleting meetings', () => {
+  it('removes stored media and staging objects before the row', async () => {
+    const backend = setup({
+      objects: {
+        [`uploads/${mineId}/media`]: { body: new Uint8Array(4), type: 'video/webm' },
+        [`staging/${mineId}/audio`]: { body: new Uint8Array(4), type: 'audio/wav' },
+      },
+      shares: [{ meeting_id: mineId, token: 'c'.repeat(64), enabled: true }],
     });
     const response = await ingestionApi(
-      new Request(`https://app.example/api/uploads/${id}/process`, {
-        method: 'POST',
-        headers: {
-          Cookie: `__Host-fathom-clone=${'a'.repeat(64)}`,
-          Origin: 'https://app.example',
-          'Content-Type': 'application/json',
-        },
-        body: '{}',
-      }),
-      { ...env, AI: { run } },
+      as(userA, `/api/uploads/${mineId}`, { method: 'DELETE' }),
+      backend.env,
     );
-    const result = (await response.json()) as {
-      transcript: { start: number }[];
-      processing_error: string;
-    };
-    expect(result.processing_error).toBe('analysis_failed');
-    expect(result.transcript.map((segment) => segment.start)).toEqual([0, 120]);
-    expect(ranges).toEqual([
-      'bytes=0-43',
-      'bytes=44-3840043',
-      'bytes=3840044-3872043',
-    ]);
-    expect(
-      run.mock.calls.filter(([model]) => model.includes('whisper')),
-    ).toHaveLength(2);
+    expect(await response.json()).toEqual({ deleted: true });
+    const order = backend.log
+      .filter((call) => call.method === 'DELETE')
+      .map((call) => new URL(call.url).pathname);
+    expect(order.slice(0, 4).sort()).toEqual(
+      [
+        `/bucket/staging/${mineId}/audio`,
+        `/bucket/staging/${mineId}/media`,
+        `/bucket/uploads/${mineId}/audio-media`,
+        `/bucket/uploads/${mineId}/media`,
+      ].sort(),
+    );
+    expect(order[4]).toBe('/rest/v1/meetings');
+    expect(backend.objects.size).toBe(0);
+    expect(backend.tables.meetings.map((row) => row.id)).toEqual([theirsId]);
+    expect(backend.tables.meeting_shares).toEqual([]);
   });
-  it('leaves the public demo independent of credentials or guest authentication', async () => {
+
+  it('keeps the meeting when storage cleanup fails', async () => {
+    const backend = setup();
+    backend.state.failObjectDeletes = true;
     const response = await ingestionApi(
-      new Request('https://app.example/api/uploads'),
-      {} as IngestionEnv,
-    );
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual([]);
-    expect(response.headers.get('Cache-Control')).toContain('no-store');
-  });
-  it('creates an HttpOnly secure guest cookie without returning its value as JSON', async () => {
-    const response = await ingestionApi(
-      new Request('https://app.example/api/session', {
-        method: 'POST',
-        headers: {
-          Origin: 'https://app.example',
-          'Content-Type': 'application/json',
-        },
-        body: '{}',
-      }),
-      env,
-    );
-    expect(response.status).toBe(200);
-    expect(response.headers.get('Set-Cookie')).toMatch(
-      /^__Host-fathom-clone=[a-f0-9]{64}; Path=\/; HttpOnly; Secure; SameSite=Strict;/,
-    );
-    expect(await response.json()).toEqual({ ready: true });
-  });
-  it('rejects cross-origin writes and unauthenticated private media', async () => {
-    const external = await ingestionApi(
-      new Request('https://app.example/api/session', {
-        method: 'POST',
-        headers: {
-          Origin: 'https://elsewhere.example',
-          'Content-Type': 'application/json',
-        },
-        body: '{}',
-      }),
-      env,
-    );
-    expect(external.status).toBe(403);
-    const media = await ingestionApi(
-      new Request(
-        'https://app.example/api/uploads/77777777-7777-4777-8777-777777777777/media',
-      ),
-      env,
-    );
-    expect(media.status).toBe(401);
-  });
-  it('scopes database reads to a cookie digest and never returns another visitor’s row', async () => {
-    const fetcher = vi.fn().mockResolvedValue(Response.json([]));
-    vi.stubGlobal('fetch', fetcher);
-    const response = await ingestionApi(
-      new Request(
-        'https://app.example/api/uploads/77777777-7777-4777-8777-777777777777',
-        {
-          headers: { Cookie: `__Host-fathom-clone=${'a'.repeat(64)}` },
-        },
-      ),
-      env,
-    );
-    expect(response.status).toBe(404);
-    expect(fetcher.mock.calls[0][0]).toMatch(/owner_hash=eq\.[a-f0-9]{64}$/);
-    expect(fetcher.mock.calls[0][0]).not.toContain('a'.repeat(64));
-  });
-  it('does not expose provider errors or service credentials', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          Response.json(
-            { message: 'private-provider-diagnostic' },
-            { status: 500 },
-          ),
-        ),
-    );
-    const response = await ingestionApi(
-      new Request('https://app.example/api/uploads', {
-        headers: { Cookie: `__Host-fathom-clone=${'a'.repeat(64)}` },
-      }),
-      env,
+      as(userA, `/api/uploads/${mineId}`, { method: 'DELETE' }),
+      backend.env,
     );
     expect(response.status).toBe(503);
     const text = await response.text();
-    expect(text).not.toContain('private-provider-diagnostic');
-    expect(text).not.toContain(env.SUPABASE_SERVICE_ROLE_KEY);
+    expect(text).toMatch(/Nothing else was deleted/);
+    expect(text).not.toContain('uploads/');
+    expect(backend.tables.meetings).toHaveLength(2);
+  });
+});
+
+describe('speaker names and playback', () => {
+  it('renames a transcript speaker for the owner only', async () => {
+    const backend = setup();
+    const response = await ingestionApi(
+      as(userA, `/api/uploads/${mineId}/speakers`, {
+        method: 'PATCH',
+        body: { speakerId: 'speaker', name: 'Jordan' },
+      }),
+      backend.env,
+    );
+    expect((await response.json()).speaker_names).toEqual({ speaker: 'Jordan' });
+    const unknown = await ingestionApi(
+      as(userA, `/api/uploads/${mineId}/speakers`, {
+        method: 'PATCH',
+        body: { speakerId: 'nobody', name: 'Jordan' },
+      }),
+      backend.env,
+    );
+    expect(unknown.status).toBe(404);
+  });
+
+  it('streams byte ranges of the stored recording', async () => {
+    const backend = setup({
+      objects: {
+        [`uploads/${mineId}/media`]: {
+          body: new Uint8Array([1, 2, 3, 4, 5, 6]),
+          type: 'video/webm',
+        },
+      },
+    });
+    const response = await ingestionApi(
+      as(userA, `/api/uploads/${mineId}/media`, { headers: { Range: 'bytes=2-3' } }),
+      backend.env,
+    );
+    expect(response.status).toBe(206);
+    expect(response.headers.get('Content-Range')).toBe('bytes 2-3/6');
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([3, 4]);
+  });
+});
+
+describe('starting processing', () => {
+  const pendingId = '55555555-5555-4555-8555-555555555555';
+  const pending = (overrides: Record<string, unknown> = {}) =>
+    meetingRow({
+      id: pendingId,
+      status: 'uploading',
+      processing_progress: 0,
+      processing_attempts: 0,
+      media_uploaded_at: null,
+      transcript: null,
+      ...overrides,
+    });
+  const start = (backend: ReturnType<typeof setup>) =>
+    ingestionApi(
+      as(userA, `/api/uploads/${pendingId}/process`, { method: 'POST' }),
+      backend.env,
+    );
+
+  it('claims the meeting with a lease and starts one workflow run', async () => {
+    const backend = setup({ meetings: [pending()] });
+    const response = await start(backend);
+    expect(response.status).toBe(202);
+    expect((await response.json()).status).toBe('transcribing');
+    const row = backend.tables.meetings[0];
+    expect(row).toMatchObject({ processing_attempts: 1, processing_progress: 35 });
+    expect(row.processing_lease).toMatch(/^[0-9a-f-]{36}$/);
+    expect(backend.env.PROCESS_MEETING.create).toHaveBeenCalledWith({
+      id: `${pendingId}-1`,
+      params: { meetingId: pendingId, userId: userA.id, lease: row.processing_lease },
+    });
+  });
+
+  it('resumes analysis without re-transcribing a saved transcript', async () => {
+    const backend = setup({
+      meetings: [
+        pending({
+          status: 'failed',
+          processing_error: 'analysis_failed',
+          processing_progress: 80,
+          processing_attempts: 2,
+          transcript: [],
+        }),
+      ],
+    });
+    await start(backend);
+    expect(backend.tables.meetings[0]).toMatchObject({
+      status: 'analyzing',
+      processing_progress: 80,
+      processing_error: null,
+      processing_attempts: 3,
+    });
+  });
+
+  it('leaves a recently active run alone', async () => {
+    const backend = setup({
+      meetings: [pending({ status: 'transcribing', updated_at: new Date().toISOString() })],
+    });
+    expect((await start(backend)).status).toBe(202);
+    expect(backend.env.PROCESS_MEETING.create).not.toHaveBeenCalled();
+  });
+
+  it('restarts a run that has been silent for too long', async () => {
+    const backend = setup({
+      meetings: [
+        pending({
+          status: 'transcribing',
+          processing_attempts: 1,
+          processing_lease: crypto.randomUUID(),
+          updated_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        }),
+      ],
+    });
+    expect((await start(backend)).status).toBe(202);
+    expect(backend.env.PROCESS_MEETING.create).toHaveBeenCalledWith(
+      expect.objectContaining({ id: `${pendingId}-2` }),
+    );
+  });
+
+  it('stops after the retry limit', async () => {
+    const backend = setup({
+      meetings: [pending({ status: 'failed', processing_error: 'transcription_failed', processing_attempts: 6 })],
+    });
+    expect((await start(backend)).status).toBe(429);
+    expect(backend.env.PROCESS_MEETING.create).not.toHaveBeenCalled();
+  });
+
+  it('does not start a completed meeting again', async () => {
+    const backend = setup();
+    const response = await ingestionApi(
+      as(userA, `/api/uploads/${mineId}/process`, { method: 'POST' }),
+      backend.env,
+    );
+    expect(response.status).toBe(200);
+    expect(backend.env.PROCESS_MEETING.create).not.toHaveBeenCalled();
+  });
+
+  it('marks the meeting retryable when the workflow cannot start', async () => {
+    const backend = setup({ meetings: [pending()] });
+    backend.env.PROCESS_MEETING.create.mockRejectedValueOnce(new Error('down'));
+    const response = await start(backend);
+    expect(response.status).toBe(503);
+    expect(backend.tables.meetings[0]).toMatchObject({
+      status: 'failed',
+      processing_error: 'processing_timeout',
+      processing_lease: null,
+    });
   });
 });
