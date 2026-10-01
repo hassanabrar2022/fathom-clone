@@ -14,7 +14,8 @@
     "deploy": "npm run build && wrangler deploy",
     "dev:api": "npm run build && wrangler dev --port 8788",
     "dev:web": "vite --host 0.0.0.0",
-    "audit:secrets": "node scripts/audit-secrets.mjs"
+    "audit:secrets": "node scripts/audit-secrets.mjs",
+    "seed": "node scripts/seed.mjs"
   },
   "engines": {
     "node": ">=22.12"

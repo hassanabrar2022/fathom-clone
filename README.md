@@ -8,6 +8,22 @@ moment they were said. Highlight moments mid-call, search across every
 meeting, and share meetings or clips with revocable public links. Recordings
 can also be uploaded.
 
+## Try it
+
+Sign in to the deployed app with the seeded demo account:
+
+```
+demo@fathomclone.app
+fathom-clone-demo-2026
+```
+
+It has eight finished meetings, including a 62 minute call with eight speakers,
+each with a speaker-labelled transcript, all three summary templates, action
+items linked to the second they were said, saved moments, and public share
+links. The recordings behind them are placeholder audio of the correct length,
+so playback, transcript-follow, and timestamp jumps all work, but there is no
+speech to hear. Everything else is real data.
+
 ## Features
 
 - Email/password accounts with email confirmation, password reset, password
@@ -79,7 +95,7 @@ valid `CLOUDFLARE_API_TOKEN` in `.env`.
 ```sh
 npm run lint
 npm run typecheck
-npm test                 # unit tests (Vitest)
+npm test                 # unit tests (Vitest), including the seed library
 npm run build
 npx playwright install chromium firefox
 npm run test:e2e         # browser tests (Chromium, Firefox, mobile)
@@ -147,6 +163,12 @@ One-time setup:
 4. **Secrets:** `npx wrangler deploy` once to create the Worker, then
    `node scripts/setup.mjs secrets`.
 
+5. **Demo data:** `npm run seed` creates the demo account and its eight
+   meetings. Re-running replaces the library and keeps every share link, because
+   ids and tokens are derived from the account id and the meeting key. Pass
+   `--no-media` to skip the audio upload (about 170 MB of silence across the
+   library) and `--clear` to remove the seeded meetings again.
+
 Each release: `npm run deploy`.
 
 ## Limits
@@ -164,3 +186,6 @@ Each release: `npm run deploy`.
   of the same browser, and this app's tab left open until the call ends.
 - Calendar changes after a bot is scheduled (moved or cancelled events) are
   not followed; switch the notetaker off and on again.
+- Seeded demo recordings are silence of the right length, not real audio. The
+  transcripts, summaries, action items, and moments are real content; the sound
+  is not. `scripts/seed-data.mjs` is the whole library in one file.

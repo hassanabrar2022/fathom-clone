@@ -5,6 +5,8 @@ lists things. Each step says what to click and what to say.
 
 - Live app: https://fathom-clone.hassanabrar2022.workers.dev
 - Code: https://github.com/hassanabrar2022/fathom-clone
+- Demo sign-in: `demo@fathomclone.app` / `fathom-clone-demo-2026` — eight
+  seeded meetings, including the 62 minute eight-speaker call
 
 ---
 
@@ -17,11 +19,11 @@ lists things. Each step says what to click and what to say.
    call with yourself ahead of time (steps in part 3), talk about something
    concrete ("ship the pilot Friday, Grace sends release notes"), and add one
    highlight while you talk.
-4. **Have one long, many-speaker meeting ready** for the "eight people, one
-   hour" part. Open a long panel discussion or podcast with several speakers in
-   a Chrome tab, record that tab with "Record from this browser" (part 3), and
-   let it run. Start this early; an hour of audio takes several minutes to
-   process.
+4. **The long, many-speaker meeting is already seeded.** "Q4 roadmap review" is
+   62 minutes with eight named speakers, 60 transcript segments, nine action
+   items, and three moments. Use it for part 9 rather than recording one. Its
+   audio is silence of the right length, so scrub and click timestamps rather
+   than playing it with sound up.
 5. **Open a Google Meet** in a second tab (meet.new) so it's ready to record.
 6. **Open an Incognito window** for the share-link step, so viewers see that
    someone who wasn't on the call can open it.
@@ -124,7 +126,7 @@ Click the result; it opens the meeting **at that moment**.
 
 ### 9. The eight-person, one-hour call (4:05–4:40)
 
-Open the long meeting you prepared.
+Open **Q4 roadmap review** from the seeded library.
 
 > "This is the case that matters. An hour with eight people breaks the naive
 > approach. Here's what I did:
@@ -150,6 +152,10 @@ Open the long meeting you prepared.
 
 - **Capture is stubbed** with browser recording. The Recall.ai bot is built and
   tested against a mock, not a real call.
+- **The seeded library's audio is silence** of the correct length, so playback,
+  transcript following, and timestamp links work but there is nothing to hear.
+  The transcripts and summaries are real written content. Say this when you open
+  the Q4 roadmap review.
 - **Browser recordings have one speaker label** ("Speaker", renameable). Only
   the bot path names each participant.
 - **The AI model is small** (Cloudflare's free tier). It can get an action-item
