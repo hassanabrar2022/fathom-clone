@@ -1,0 +1,403 @@
+/* Motion language: revealed type, a moving source field, and quiet product sequences. */
+#root .marketing-page .hero-workflow {
+  background: #080808;
+}
+#root .marketing-page .hero-workflow::before {
+  inset: -18px;
+  z-index: -1;
+  background-image: radial-gradient(
+    circle,
+    rgb(255 221 197 / 60%) 0.8px,
+    transparent 1.5px
+  );
+  background-size: 8px 8px;
+  opacity: 0.46;
+  mask-image: radial-gradient(
+    ellipse 78% 83% at 61% 51%,
+    #000 22%,
+    transparent 88%
+  );
+}
+#root .marketing-page .hero-workflow::after {
+  content: '';
+  position: absolute;
+  inset: -22%;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 35% 47% at 82% 24%,
+      rgb(238 133 82 / 48%),
+      transparent 82%
+    ),
+    radial-gradient(
+      ellipse 47% 37% at 24% 86%,
+      rgb(157 67 39 / 38%),
+      transparent 84%
+    ),
+    radial-gradient(
+      ellipse 27% 43% at 82% 83%,
+      rgb(245 238 222 / 19%),
+      transparent 80%
+    );
+}
+#root .marketing-page .hero-workflow[data-playing='true']::before {
+  animation: fathom-clone-dot-current 14s ease-in-out infinite alternate;
+}
+#root .marketing-page .hero-workflow[data-playing='true']::after {
+  animation: fathom-clone-light-current 16s ease-in-out infinite alternate;
+}
+html:not([data-theme='dark']) #root .marketing-page .hero-workflow {
+  background: #f8f4ed;
+}
+html:not([data-theme='dark']) #root .marketing-page .hero-workflow::before {
+  background-image: radial-gradient(
+    circle,
+    rgb(137 75 47 / 62%) 0.8px,
+    transparent 1.5px
+  );
+  opacity: 0.24;
+}
+html:not([data-theme='dark']) #root .marketing-page .hero-workflow::after {
+  background:
+    radial-gradient(
+      ellipse 35% 47% at 82% 24%,
+      rgb(236 151 109 / 32%),
+      transparent 82%
+    ),
+    radial-gradient(
+      ellipse 47% 37% at 24% 86%,
+      rgb(214 170 145 / 28%),
+      transparent 84%
+    ),
+    radial-gradient(
+      ellipse 27% 43% at 82% 83%,
+      rgb(255 255 255 / 50%),
+      transparent 80%
+    );
+}
+@keyframes fathom-clone-dot-current {
+  from {
+    transform: translate3d(-14px, -8px, 0);
+    opacity: 0.35;
+  }
+  to {
+    transform: translate3d(12px, 8px, 0);
+    opacity: 0.53;
+  }
+}
+@keyframes fathom-clone-light-current {
+  from {
+    transform: translate3d(-3%, 2%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(4%, -3%, 0) scale(1.04);
+  }
+}
+
+/* One line resolves into Fathom Clone's evidence color after the headline lands. */
+#root .marketing-page .marketing-hero h1 span:nth-child(3) {
+  animation:
+    fathom-clone-headline 680ms 280ms cubic-bezier(0.22, 1, 0.36, 1) both,
+    fathom-clone-title-tint 1100ms 690ms ease-out both;
+}
+@keyframes fathom-clone-title-tint {
+  from {
+    color: var(--stage-muted);
+  }
+  55% {
+    color: var(--stage-ink);
+  }
+  to {
+    color: var(--stage-accent);
+  }
+}
+/* The recorded source lights up one step at a time. */
+#root .marketing-page .hero-workflow-step {
+  transition:
+    color 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 260ms ease;
+}
+#root .marketing-page .hero-workflow-source {
+  transition:
+    border-color 320ms ease,
+    background-color 320ms ease,
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+#root .marketing-page .hero-workflow[data-phase='3'] .hero-workflow-source {
+  transform: translateY(-3px);
+  background: #241711;
+}
+html:not([data-theme='dark'])
+  #root
+  .marketing-page
+  .hero-workflow[data-phase='3']
+  .hero-workflow-source {
+  background: #f6e0d1;
+}
+
+/* The reference's ink reveal becomes a Fathom Clone evidence-color sweep. */
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  #root
+    .marketing-page.has-motion
+    :is(.marketing-section, .marketing-close)
+    h2
+    em {
+    background-image: linear-gradient(
+      90deg,
+      var(--stage-accent) 0 var(--ink-stop, 100%),
+      var(--stage-muted) var(--ink-stop, 100%) 100%
+    );
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+  }
+}
+#root .marketing-page .marketing-eyebrow i {
+  transition:
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 300ms ease;
+}
+#root .marketing-page .marketing-section.is-visible .marketing-eyebrow i {
+  transform: scale(1.18);
+}
+
+/* A small progress rule belongs to the recording → action story only. */
+#root .marketing-page .transform-steps {
+  position: relative;
+}
+#root .marketing-page .transform-steps::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  pointer-events: none;
+  background: var(--stage-accent);
+  transform: scaleY(var(--story-progress, 0));
+  transform-origin: top;
+}
+#root .marketing-page .transformation.is-visible .transform-steps button {
+  animation: fathom-clone-step-arrive 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+#root
+  .marketing-page
+  .transformation.is-visible
+  .transform-steps
+  button:nth-child(2) {
+  animation-delay: 80ms;
+}
+#root
+  .marketing-page
+  .transformation.is-visible
+  .transform-steps
+  button:nth-child(3) {
+  animation-delay: 160ms;
+}
+#root
+  .marketing-page
+  .transformation.is-visible
+  .transform-steps
+  button:nth-child(4) {
+  animation-delay: 240ms;
+}
+@keyframes fathom-clone-step-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+#root .marketing-page .transform-art .transform-visual,
+#root .marketing-page .transform-art .transform-object {
+  animation: fathom-clone-art-arrive 430ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+#root .marketing-page .transform-art .transform-object {
+  animation-delay: 80ms;
+}
+@keyframes fathom-clone-art-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Each illustration moves for the behavior it represents. */
+#root .marketing-page .transcript-seek > div > i {
+  transition: width 620ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+#root .marketing-page .transcript-rows button.is-active {
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+#root .marketing-page .summary-demo-copy h3,
+#root .marketing-page .summary-demo-copy p,
+#root .marketing-page .summary-demo-copy > div {
+  animation: fathom-clone-art-arrive 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+#root .marketing-page .summary-demo-copy p {
+  animation-delay: 70ms;
+}
+#root .marketing-page .summary-demo-copy > div {
+  animation-delay: 140ms;
+}
+#root .marketing-page .search-demo-results article {
+  animation: fathom-clone-art-arrive 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+#root .marketing-page .search-demo-results article:nth-child(2) {
+  animation-delay: 80ms;
+}
+#root .marketing-page .search-demo-results article:nth-child(3) {
+  animation-delay: 160ms;
+}
+#root .marketing-page .evidence-story.is-visible .evidence-thread i {
+  animation: fathom-clone-thread-draw 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+#root .marketing-page .evidence-story.is-visible .evidence-thread i:last-child {
+  animation-delay: 250ms;
+}
+@keyframes fathom-clone-thread-draw {
+  from {
+    opacity: 0.3;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+#root .marketing-page .moments-story.is-visible .moments-line b {
+  animation: fathom-clone-moment-select 600ms 180ms cubic-bezier(0.22, 1, 0.36, 1)
+    both;
+}
+@keyframes fathom-clone-moment-select {
+  from {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Brief chapter separators keep the long story connected. */
+#root .marketing-page :is(.transformation, .use-cases, .marketing-close) {
+  position: relative;
+}
+#root
+  .marketing-page
+  :is(.transformation, .use-cases, .marketing-close)::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: min(calc(100% - 64px), 1200px);
+  height: 22px;
+  transform: translateX(-50%);
+  border-block: 1px solid var(--stage-rule);
+  background: repeating-linear-gradient(
+    120deg,
+    transparent 0 12px,
+    var(--stage-rule) 12px 13px
+  );
+  opacity: 0.68;
+  pointer-events: none;
+}
+#root .marketing-page .close-art {
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--stage-panel);
+}
+#root .marketing-page .close-art::before {
+  content: '';
+  position: absolute;
+  inset: -15px;
+  z-index: -1;
+  background-image: radial-gradient(
+    circle,
+    var(--stage-accent) 0.8px,
+    transparent 1.5px
+  );
+  background-size: 8px 8px;
+  mask-image: radial-gradient(ellipse at 55% 50%, #000 8%, transparent 75%);
+  opacity: 0.4;
+}
+#root .marketing-page .close-art::after {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  z-index: -2;
+  background: radial-gradient(
+    ellipse 37% 42% at 68% 48%,
+    color-mix(in srgb, var(--stage-accent) 30%, transparent),
+    transparent 85%
+  );
+}
+#root .marketing-page .marketing-close.is-in-view .close-art::before {
+  animation: fathom-clone-dot-current 17s ease-in-out infinite alternate;
+}
+#root .marketing-page .marketing-close.is-in-view .close-art::after {
+  animation: fathom-clone-light-current 19s ease-in-out infinite alternate;
+}
+/* Ambient loops sleep when the corresponding story has left the viewport. */
+#root .marketing-page .transcript-story:not(.is-in-view) .source-waveform i,
+#root
+  .marketing-page
+  .transformation:not(.is-in-view)
+  .visual-recording
+  > i
+  span,
+#root .marketing-page .marketing-close:not(.is-in-view) .close-core {
+  animation-play-state: paused;
+}
+@media (max-width: 900px) {
+  #root .marketing-page .transform-steps::before {
+    content: none;
+  }
+}
+@media (max-width: 760px) {
+  #root
+    .marketing-page
+    :is(.transformation, .use-cases, .marketing-close)::after {
+    width: min(calc(100% - 32px), 1200px);
+    height: 14px;
+  }
+  #root .marketing-page .hero-workflow[data-playing='true']::after {
+    animation-duration: 22s;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #root .marketing-page .marketing-hero h1 span:nth-child(3) {
+    color: var(--stage-accent);
+  }
+  #root .marketing-page .marketing-hero h1 span:nth-child(3),
+  #root .marketing-page .hero-workflow[data-playing='true']::before,
+  #root .marketing-page .hero-workflow[data-playing='true']::after,
+  #root .marketing-page .marketing-close.is-in-view .close-art::before,
+  #root .marketing-page .marketing-close.is-in-view .close-art::after,
+  #root .marketing-page .transformation.is-visible .transform-steps button,
+  #root .marketing-page .transform-art .transform-visual,
+  #root .marketing-page .transform-art .transform-object,
+  #root .marketing-page .summary-demo-copy :is(h3, p, div),
+  #root .marketing-page .search-demo-results article,
+  #root .marketing-page .evidence-story.is-visible .evidence-thread i,
+  #root .marketing-page .moments-story.is-visible .moments-line b {
+    animation: none;
+  }
+  #root .marketing-page .transcript-seek > div > i,
+  #root .marketing-page .transcript-rows button.is-active {
+    transition: none;
+  }
+}

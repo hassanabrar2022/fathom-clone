@@ -1,0 +1,253 @@
+/* The chapter index is a quiet companion to the story, not another card. */
+html.lenis {
+  scroll-behavior: auto;
+}
+
+#root
+  .marketing-page
+  :is(
+    #top,
+    #product,
+    #playback,
+    #summaries,
+    #evidence,
+    #search,
+    #moments,
+    #use-cases,
+    #how-it-works,
+    #faq,
+    #start
+  ) {
+  scroll-margin-top: 82px;
+}
+
+#root .marketing-section-rail {
+  --rail-progress: 0;
+  position: fixed;
+  z-index: 35;
+  top: 50%;
+  left: 14px;
+  display: flex;
+  flex-direction: column;
+  width: 48px;
+  max-height: min(700px, calc(100vh - 156px));
+  padding: 12px 8px;
+  transform: translateY(-50%);
+  border: 1px solid var(--stage-rule);
+  background: color-mix(in srgb, var(--stage) 94%, transparent);
+  color: var(--stage-muted);
+  box-shadow: 0 16px 42px rgb(0 0 0 / 9%);
+  backdrop-filter: blur(16px);
+  transition:
+    width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+}
+
+#root .marketing-section-rail:is(:hover, :focus-within) {
+  width: 184px;
+  border-color: color-mix(in srgb, var(--stage-accent) 46%, var(--stage-rule));
+  box-shadow: 0 22px 56px rgb(0 0 0 / 16%);
+}
+
+#root .section-rail-heading,
+#root .section-rail-end {
+  overflow: hidden;
+  height: 0;
+  opacity: 0;
+  white-space: nowrap;
+  font: 10px var(--editorial-mono);
+  letter-spacing: 0.08em;
+  transition: opacity 180ms ease;
+}
+
+#root
+  .marketing-section-rail:is(:hover, :focus-within)
+  :is(.section-rail-heading, .section-rail-end) {
+  height: auto;
+  opacity: 1;
+}
+
+#root .section-rail-heading {
+  padding: 5px 10px 12px;
+  color: var(--stage-accent);
+}
+
+#root .section-rail-end {
+  padding: 12px 10px 4px;
+  border-top: 1px solid var(--stage-rule);
+  color: var(--stage-faint);
+}
+
+#root .section-rail-list {
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 0;
+  scrollbar-color: var(--stage-rule) transparent;
+  scrollbar-width: thin;
+}
+
+#root .section-rail-track {
+  position: absolute;
+  top: 17px;
+  bottom: 17px;
+  left: 3px;
+  width: 1px;
+  background: var(--stage-rule);
+  pointer-events: none;
+}
+
+#root .section-rail-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--stage-accent);
+  transform: scaleY(var(--rail-progress));
+  transform-origin: top;
+}
+
+#root .section-rail-list a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 3px 0 10px;
+  color: var(--stage-faint);
+  white-space: nowrap;
+  transition:
+    color 180ms ease,
+    background 180ms ease;
+}
+
+#root .section-rail-list a::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  transform: translateY(-50%);
+  border: 1px solid var(--stage-faint);
+  border-radius: 50%;
+  background: var(--stage);
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    scale 180ms ease;
+}
+
+#root .section-rail-list a:is(:hover, .is-active, :focus-visible) {
+  color: var(--stage-ink);
+}
+
+#root .section-rail-list a.is-active::before {
+  scale: 1.2;
+  border-color: var(--stage-accent);
+  background: var(--stage-accent);
+}
+
+#root .section-rail-number {
+  flex: none;
+  width: 22px;
+  color: inherit;
+  font: 10px var(--editorial-mono);
+  letter-spacing: -0.02em;
+}
+
+#root .section-rail-list a.is-active .section-rail-number {
+  color: var(--stage-accent);
+}
+
+#root .section-rail-label {
+  opacity: 0;
+  font-size: 12px;
+  letter-spacing: -0.02em;
+  transition: opacity 160ms ease;
+}
+
+#root .marketing-section-rail:is(:hover, :focus-within) .section-rail-label {
+  opacity: 1;
+  transition-delay: 90ms;
+}
+
+@media (min-width: 1760px) {
+  #root .marketing-section-rail {
+    left: max(24px, calc((100vw - 1700px) / 2));
+    width: 184px;
+  }
+  #root .section-rail-heading,
+  #root .section-rail-end {
+    height: auto;
+    opacity: 1;
+  }
+  #root .section-rail-label {
+    opacity: 1;
+  }
+}
+
+@media (min-width: 1360px) and (max-width: 1759px) {
+  #root .marketing-section-rail,
+  #root .marketing-section-rail:is(:hover, :focus-within) {
+    left: 14px;
+    width: 44px;
+    padding: 0 6px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+  #root .marketing-section-rail :is(.section-rail-heading, .section-rail-end),
+  #root
+    .marketing-section-rail:is(:hover, :focus-within)
+    :is(.section-rail-heading, .section-rail-end) {
+    display: none;
+  }
+  #root .section-rail-list {
+    overflow: visible;
+  }
+  #root .section-rail-list a {
+    height: 34px;
+  }
+  #root .section-rail-label {
+    position: absolute;
+    z-index: 1;
+    top: 50%;
+    left: 38px;
+    width: max-content;
+    padding: 8px 10px;
+    transform: translate3d(-5px, -50%, 0);
+    border: 1px solid var(--stage-rule);
+    background: var(--stage-panel);
+    box-shadow: 0 10px 24px rgb(0 0 0 / 16%);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      opacity 160ms ease,
+      transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  #root .marketing-section-rail:is(:hover, :focus-within) .section-rail-label {
+    opacity: 0;
+    transition-delay: 0ms;
+  }
+  #root .section-rail-list a:is(:hover, :focus-visible) .section-rail-label {
+    transform: translate3d(0, -50%, 0);
+    opacity: 1 !important;
+  }
+}
+
+@media (max-width: 1359px) {
+  #root .marketing-section-rail {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #root .marketing-section-rail,
+  #root .marketing-section-rail *,
+  #root .marketing-section-rail *::before,
+  #root .marketing-section-rail *::after {
+    transition-duration: 0.01ms !important;
+  }
+}

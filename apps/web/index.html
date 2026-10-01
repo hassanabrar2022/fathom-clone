@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f6f4ef" />
+    <meta
+      name="description"
+      content="Upload a meeting. Keep the searchable transcript, clear summaries, source-linked actions, and moments worth revisiting with Fathom Clone."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Fathom Clone" />
+    <meta property="og:url" content="https://fathom-clone.pages.dev/" />
+    <meta
+      property="og:title"
+      content="Fathom Clone — Keep what the meeting meant"
+    />
+    <meta
+      property="og:description"
+      content="Your recording becomes searchable transcripts, clear summaries, and action items connected to their source."
+    />
+    <meta
+      property="og:image"
+      content="https://fathom-clone.pages.dev/media/recording-walkthrough.png"
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Fathom Clone — Keep what the meeting meant</title>
+  </head>
+  <body>
+    <script>
+      try {
+        const choice = localStorage.getItem('fathom-clone-theme');
+        const dark =
+          choice === 'dark' ||
+          (!choice && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.querySelector('meta[name="theme-color"]').content = dark
+          ? '#0a0a0a'
+          : '#f6f4ef';
+      } catch {
+        document.documentElement.dataset.theme = matchMedia(
+          '(prefers-color-scheme: dark)',
+        ).matches
+          ? 'dark'
+          : 'light';
+      }
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

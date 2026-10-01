@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "include": ["/media/recording-walkthrough-optimized.webm", "/api/*"],
+  "exclude": []
+}

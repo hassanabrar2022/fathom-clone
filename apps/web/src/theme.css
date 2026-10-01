@@ -1,0 +1,29 @@
+.theme-toggle {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.72;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    background 160ms ease;
+}
+.theme-toggle:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+  background: var(--theme-toggle-hover, rgba(100, 105, 140, 0.1));
+}
+.theme-toggle:active {
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle {
+    transition: none;
+  }
+}

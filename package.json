@@ -1,0 +1,53 @@
+{
+  "name": "fathom-clone",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "tsc --noEmit && vite build && node scripts/build-worker.mjs",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "deploy": "npm run build && wrangler pages deploy apps/web/dist --project-name fathom-clone",
+    "dev:api": "npm run build && wrangler pages dev apps/web/dist --port 8788",
+    "seed:reviewer": "node scripts/seed-reviewer.mjs",
+    "dev:web": "vite --host 0.0.0.0"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.23",
+    "aws4fetch": "^1.0.20",
+    "lenis": "^1.3.26",
+    "lucide-react": "^1.45.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.3",
+    "zod": "^4.6.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260914.1",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.5.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.6",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.0",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0",
+    "wrangler": "^4.131.1"
+  }
+}

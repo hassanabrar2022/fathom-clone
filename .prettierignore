@@ -1,0 +1,10 @@
+node_modules
+dist
+package-lock.json
+.agent-logs
+.codex
+CAPTURE-TEST.md
+FATHOM_CLONE_AGENT_BUILD_SPEC.md
+fathom-ui-and-meeting-summary
+test-results
+playwright-report

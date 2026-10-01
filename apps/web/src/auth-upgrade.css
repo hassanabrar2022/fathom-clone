@@ -1,0 +1,185 @@
+.auth-page {
+  --auth-canvas: #f5f6f2;
+  --auth-surface: #fff;
+  --auth-ink: #222a25;
+  --auth-muted: #68766b;
+  --auth-line: #d7e0d7;
+  --auth-accent: #b54828;
+  --auth-accent-soft: #fae9df;
+  --theme-toggle-hover: rgba(80, 90, 164, 0.1);
+  background: var(--auth-canvas);
+  color: var(--auth-ink);
+}
+.auth-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.auth-top .theme-toggle {
+  color: var(--auth-muted);
+  border-color: var(--auth-line);
+}
+.auth-story {
+  background:
+    radial-gradient(
+      ellipse 80% 50% at 85% 70%,
+      rgba(133, 143, 178, 0.11),
+      transparent 72%
+    ),
+    #202923;
+}
+.auth-main {
+  background: var(--auth-canvas);
+}
+.auth-field input {
+  background: var(--auth-surface);
+  color: var(--auth-ink);
+  border-color: var(--auth-line);
+}
+.auth-field input:focus {
+  border-color: var(--auth-accent);
+  box-shadow: 0 0 0 3px var(--auth-accent-soft);
+}
+.auth-heading > p,
+.auth-confirmation > p,
+.auth-switch,
+.auth-security,
+.auth-back {
+  color: var(--auth-muted);
+}
+.auth-field > label,
+.auth-heading h1,
+.auth-confirmation h1 {
+  color: var(--auth-ink);
+}
+.auth-submit {
+  background: var(--auth-ink);
+  color: var(--auth-canvas);
+}
+.auth-submit:hover {
+  background: var(--auth-accent);
+}
+.auth-switch a,
+.auth-callback > a:not(.auth-submit) {
+  color: var(--auth-accent);
+}
+.auth-story-art {
+  animation: auth-art-enter 700ms 200ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.auth-form-wrap {
+  animation: auth-art-enter 560ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes auth-art-enter {
+  from {
+    opacity: 0;
+    translate: 0 12px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+html[data-theme='dark'] .auth-page {
+  --auth-canvas: #171d1b;
+  --auth-surface: #252f29;
+  --auth-ink: #f1f4ed;
+  --auth-muted: #b1c0b4;
+  --auth-line: #405047;
+  --auth-accent: #ffb38f;
+  --auth-accent-soft: #353a52;
+  --theme-toggle-hover: rgba(185, 184, 255, 0.12);
+  color-scheme: dark;
+}
+html[data-theme='dark'] .auth-story {
+  background:
+    radial-gradient(
+      ellipse 80% 50% at 85% 70%,
+      rgba(116, 130, 178, 0.1),
+      transparent 72%
+    ),
+    #202923;
+}
+html[data-theme='dark'] .auth-story-art {
+  background: #29342d;
+  color: var(--auth-ink);
+  border-color: var(--auth-line);
+}
+html[data-theme='dark'] .auth-story-art > div:first-child span {
+  color: var(--auth-accent);
+}
+html[data-theme='dark'] .auth-story-art > div:last-child {
+  background: #344139;
+  color: #c9ead0;
+  border-color: #4a5b4e;
+}
+html[data-theme='dark'] .auth-story-art > i {
+  background: linear-gradient(
+    90deg,
+    var(--auth-accent) 0 60%,
+    var(--auth-line) 60%
+  );
+}
+html[data-theme='dark'] .auth-eyebrow {
+  color: var(--auth-muted);
+}
+html[data-theme='dark'] .auth-eyebrow > span {
+  background: var(--auth-accent);
+  box-shadow: 0 0 0 4px var(--auth-accent-soft);
+}
+html[data-theme='dark'] .auth-story .auth-eyebrow > span {
+  box-shadow: 0 0 0 4px #4a3026;
+}
+html[data-theme='dark'] .auth-story h2 em {
+  color: var(--auth-accent);
+}
+html[data-theme='dark'] .auth-field input::placeholder {
+  color: #899b8d;
+}
+html[data-theme='dark'] .auth-password-wrap button {
+  color: var(--auth-muted);
+}
+html[data-theme='dark'] .auth-confirmation-mark {
+  background: var(--auth-accent-soft);
+  color: var(--auth-accent);
+}
+html[data-theme='dark'] .auth-error {
+  background: #38272b;
+  color: #ffc7ce;
+  border-color: #80515b;
+}
+html[data-theme='dark'] .auth-callback {
+  color: var(--auth-ink);
+}
+html[data-theme='dark'] .auth-callback p {
+  color: var(--auth-muted);
+}
+html[data-theme='dark'] .auth-loading {
+  background: var(--auth-canvas);
+  color: var(--auth-muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-story-art,
+  .auth-form-wrap {
+    animation: none;
+  }
+}
+
+html[data-theme='dark'] .auth-callback {
+  color: #f1f4ed;
+}
+html[data-theme='dark'] .auth-callback p {
+  color: #b1c0b4;
+}
+html[data-theme='dark'] .auth-callback .auth-confirmation-mark {
+  color: #ffb38f;
+  background: #353a52;
+}
+html[data-theme='dark'] .auth-loading {
+  background: #171d1b;
+  color: #b1c0b4;
+}
+html[data-theme='dark'] body:has(.auth-callback),
+html[data-theme='dark'] body:has(.auth-loading) {
+  background: #171d1b;
+}

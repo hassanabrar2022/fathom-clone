@@ -1,0 +1,95 @@
+/* The account entry follows the selected public palette on both halves. */
+html:not([data-theme='dark']) #root .auth-page {
+  --auth-canvas: #f6f4ef;
+  --auth-surface: #fffdf9;
+  --auth-ink: #25221e;
+  --auth-muted: #625d55;
+  --auth-line: #d8d2c8;
+  --auth-accent: #ae4728;
+  --auth-accent-soft: #f6e4d8;
+}
+html:not([data-theme='dark']) #root .auth-story {
+  color: #25221e;
+  background: #eeeae3;
+  border-right-color: #d8d2c8;
+}
+html:not([data-theme='dark']) #root .auth-story::after {
+  opacity: 0.08;
+}
+html:not([data-theme='dark']) #root .auth-brand {
+  color: #25221e;
+}
+html:not([data-theme='dark']) #root .auth-brand > span {
+  background: #ae4728;
+  color: #fffdf9;
+}
+html:not([data-theme='dark']) #root .auth-brand sup,
+html:not([data-theme='dark']) #root .auth-story .auth-eyebrow,
+html:not([data-theme='dark']) #root .auth-story h2 em {
+  color: #ae4728;
+}
+html:not([data-theme='dark']) #root .auth-story h2 {
+  color: #25221e;
+}
+html:not([data-theme='dark']) #root .auth-story-content > p,
+html:not([data-theme='dark']) #root .auth-story-footer {
+  color: #625d55;
+}
+html:not([data-theme='dark']) #root .auth-page .auth-story-art {
+  color: #25221e;
+  background: #fffdf9;
+  border-color: #d8d2c8;
+}
+html:not([data-theme='dark']) #root .auth-story-art > div:first-child span {
+  color: #ae4728;
+}
+html:not([data-theme='dark'])
+  #root
+  .auth-page
+  .auth-story-art
+  > div:last-child {
+  color: #8e3f26;
+  background: #f6e4d8;
+  border-color: #d5b19d;
+}
+html:not([data-theme='dark']) #root .auth-page .auth-story-art > i {
+  background: linear-gradient(90deg, #ae4728 0 60%, #d8d2c8 60%);
+}
+
+/* Carry the landing page's black stage through both account screens. */
+html[data-theme='dark'] #root .auth-page {
+  --auth-canvas: #050505;
+  --auth-surface: #101010;
+  --auth-ink: #f5f3ef;
+  --auth-muted: #b9b5ae;
+  --auth-line: #292929;
+  --auth-accent: #ed8b63;
+  --auth-accent-soft: #2d1d17;
+  background: var(--auth-canvas);
+}
+html[data-theme='dark'] #root .auth-page .auth-story {
+  background: #080808;
+  border-right-color: var(--auth-line);
+}
+html[data-theme='dark'] #root .auth-page .auth-main {
+  background: var(--auth-canvas);
+}
+html[data-theme='dark'] #root .auth-page .auth-field input {
+  background: var(--auth-surface);
+  border-color: var(--auth-line);
+}
+html[data-theme='dark'] #root .auth-page .auth-field input::placeholder {
+  color: #89847d;
+}
+html[data-theme='dark'] #root .auth-page .auth-story-art {
+  background: #101010;
+  border-color: #342b26;
+}
+html[data-theme='dark'] #root .auth-page .auth-story-art > div:last-child {
+  background: #211713;
+  border-color: #5a392c;
+}
+html[data-theme='dark'] .auth-loading,
+html[data-theme='dark'] body:has(.auth-loading) {
+  background: #050505;
+}

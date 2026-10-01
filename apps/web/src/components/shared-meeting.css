@@ -1,0 +1,81 @@
+@import './shared-moment.css';
+@import './recording.css';
+
+.full-share-intro {
+  max-width: 900px;
+}
+.full-share-intro h1 {
+  margin-top: var(--space-3);
+}
+.full-share-intro p {
+  margin-top: var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--text-14);
+  line-height: 1.65;
+}
+.full-share-duration {
+  display: inline-block;
+  margin-top: var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+.full-share-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 440px);
+  grid-template-areas: 'player intelligence' 'transcript intelligence';
+  gap: var(--space-6);
+  align-items: start;
+}
+.full-share-main {
+  display: contents;
+}
+.full-share-main > .share-player-card {
+  grid-area: player;
+}
+.full-share-grid .intelligence-panel {
+  grid-area: intelligence;
+}
+.full-share-transcript.transcript-panel {
+  grid-area: transcript;
+  margin-top: 0;
+}
+.full-share-grid .share-player-status > span:last-child {
+  color: var(--text-tertiary);
+}
+.full-share-no-analysis {
+  grid-area: intelligence;
+  min-width: 0;
+  padding: var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.full-share-no-analysis h2 {
+  margin-top: var(--space-2);
+  font-size: var(--text-18);
+}
+.full-share-no-analysis p {
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+  line-height: 1.7;
+}
+@media (max-width: 1100px) {
+  .full-share-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'player' 'intelligence' 'transcript';
+  }
+  .full-share-grid .intelligence-panel {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+@media (max-width: 520px) {
+  .full-share-intro p {
+    font-size: var(--text-13);
+  }
+  .full-share-grid .share-player-status > span:last-child {
+    line-height: 1.5;
+  }
+}
