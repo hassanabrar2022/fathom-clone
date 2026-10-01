@@ -3,8 +3,16 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './auth-state';
 
 const Marketing = lazy(() =>
-  import('./Marketing').then((module) => ({ default: module.MarketingHome })),
+  import('./site/Home').then((module) => ({ default: module.SiteHome })),
 );
+const sitePage = (name: 'OverviewPage' | 'PricingPage' | 'SolutionPage' | 'AboutPage' | 'TermsPage' | 'PrivacyPage') =>
+  lazy(() => import('./site/Pages').then((module) => ({ default: module[name] })));
+const Overview = sitePage('OverviewPage');
+const Pricing = sitePage('PricingPage');
+const Solution = sitePage('SolutionPage');
+const About = sitePage('AboutPage');
+const Terms = sitePage('TermsPage');
+const Privacy = sitePage('PrivacyPage');
 const Login = lazy(() =>
   import('./Auth').then((module) => ({ default: module.AuthPage })),
 );
@@ -50,6 +58,12 @@ export function Root() {
     <Suspense fallback={<RouteLoading />}>
       <Routes>
         <Route path="/" element={<Marketing />} />
+        <Route path="/overview" element={<Overview />} />
+        <Route path="/pricing" element={<Pricing />} />
+        <Route path="/solutions/:slug" element={<Solution />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="/login" element={<Login mode="login" />} />
         <Route path="/signup" element={<Login mode="signup" />} />
         <Route path="/forgot-password" element={<Forgot />} />

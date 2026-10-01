@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft,
   ArrowRight,
-  AudioLines,
-  Check,
   Eye,
   EyeOff,
   LockKeyhole,
@@ -12,11 +9,8 @@ import {
 } from 'lucide-react';
 import { z } from 'zod';
 import { accountRequest, sessionSchema, useAuth } from './auth-state';
-import { ThemeToggle } from './ThemeToggle';
-import './auth.css';
-import './auth-upgrade.css';
-import './editorial.css';
-import './auth-polish.css';
+import { SiteBrand, Starfield } from './site/SiteLayout';
+import './site/auth.css';
 
 /** Only same-site app paths may be used as a post-sign-in destination. */
 export function safeNext(value: string | null) {
@@ -25,60 +19,28 @@ export function safeNext(value: string | null) {
 
 function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="auth-page">
-      <a className="skip-link" href="#auth-main">
-        Skip to content
-      </a>
-      <section className="auth-story" aria-label="Fathom Clone product story">
-        <Link className="auth-brand" to="/">
-          <span>
-            <AudioLines size={21} />
-          </span>
-          fathom <sup>clone</sup>
-        </Link>
-        <div className="auth-story-content">
-          <span className="auth-eyebrow">
-            <span /> THE CONVERSATION, KEPT CLEAR
-          </span>
-          <h2>
-            All the meaning.
-            <br />
-            <em>Still within reach.</em>
-          </h2>
+    <div className="site auth-shell">
+      <Starfield density={0.00008} />
+      <header className="auth-shell-top">
+        <SiteBrand />
+      </header>
+      <main className="auth-shell-main" id="auth-main">
+        <section className="auth-card">{children}</section>
+        <aside className="auth-quote" aria-hidden="true">
+          <span className="auth-quote-mark">“</span>
           <p>
-            Your recording becomes a transcript, a set of perspectives, and next
-            steps that lead back to the words behind them.
+            Stay in the conversation.
+            <strong>We’ll keep the notes.</strong>
           </p>
-          <div className="auth-story-art" aria-hidden="true">
-            <div>
-              <span>TRANSCRIPT · 12:47</span>
-              <p>“Let’s send the revised proposal by Friday.”</p>
-            </div>
-            <i />
-            <div>
-              <Check size={16} />
-              <span>Source linked to moment</span>
-              <ArrowRight size={15} />
-            </div>
-          </div>
-        </div>
-        <div className="auth-story-footer">
-          Fathom Clone · Made for the moments that matter.
-        </div>
-      </section>
-      <main className="auth-main" id="auth-main">
-        <div className="auth-top">
-          <Link className="auth-back" to="/">
-            <ArrowLeft size={16} /> Back to Fathom Clone
-          </Link>
-          <ThemeToggle />
-        </div>
-        <div className="auth-form-wrap">{children}</div>
-        <div className="auth-security">
-          <LockKeyhole size={14} /> Your meetings stay private until you share
-          them.
-        </div>
+          <small>Fathom Clone</small>
+          <span className="auth-quote-mark is-end">”</span>
+        </aside>
       </main>
+      <footer className="auth-shell-foot">
+        <LockKeyhole size={13} /> Your meetings stay private until you share
+        them. <Link to="/terms">Terms of Service</Link>
+        <Link to="/privacy">Privacy Policy</Link>
+      </footer>
     </div>
   );
 }
@@ -236,19 +198,8 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
       ) : (
         <>
           <div className="auth-heading">
-            <span className="auth-eyebrow">
-              <span /> {signup ? 'CREATE YOUR SPACE' : 'WELCOME BACK'}
-            </span>
-            <h1>
-              {signup
-                ? 'Make space for the next conversation.'
-                : 'Pick up where the meeting left off.'}
-            </h1>
-            <p>
-              {signup
-                ? 'Create an account to keep your recordings and their context together.'
-                : 'Sign in to return to your Fathom Clone workspace.'}
-            </p>
+            <h1>{signup ? 'Create your account' : 'Sign in to Fathom Clone'}</h1>
+            {signup && <p>Free forever. No credit card required.</p>}
           </div>
           <form onSubmit={(event) => void submit(event)} noValidate>
             <div className="auth-field">
@@ -346,9 +297,6 @@ export function ForgotPassword() {
       ) : (
         <>
           <div className="auth-heading">
-            <span className="auth-eyebrow">
-              <span /> RESET PASSWORD
-            </span>
             <h1>Forgot your password?</h1>
             <p>Enter your email and we’ll send you a link to choose a new one.</p>
           </div>
@@ -470,9 +418,6 @@ export function ResetPassword() {
       ) : (
         <>
           <div className="auth-heading">
-            <span className="auth-eyebrow">
-              <span /> NEW PASSWORD
-            </span>
             <h1>Choose a new password.</h1>
             <p>You’ll stay signed in on this browser afterward.</p>
           </div>
@@ -544,23 +489,23 @@ export function AuthCallback() {
     };
   }, [navigate, refresh, link]);
   return (
-    <main className="auth-callback">
-      <span className="auth-confirmation-mark">
-        <Mail size={25} />
-      </span>
-      <h1>
-        {error ? 'Email confirmation received' : 'Finishing your account…'}
-      </h1>
-      <p role={error ? 'alert' : 'status'}>
-        {error || 'We are connecting your confirmed account to Fathom Clone.'}
-      </p>
-      {error && (
-        <>
+    <AuthLayout>
+      <div className="auth-confirmation" role={error ? 'alert' : 'status'}>
+        <span className="auth-confirmation-mark">
+          <Mail size={25} />
+        </span>
+        <h1>
+          {error ? 'Email confirmation received' : 'Finishing your account…'}
+        </h1>
+        <p>
+          {error || 'We are connecting your confirmed account to Fathom Clone.'}
+        </p>
+        {error && (
           <Link className="auth-submit" to="/login">
             Sign in <ArrowRight size={17} />
           </Link>
-        </>
-      )}
-    </main>
+        )}
+      </div>
+    </AuthLayout>
   );
 }
