@@ -12,7 +12,16 @@ not going to reconstruct or backdate a log from the diffs, because that would be
 a fabrication and the instructions say dead ends and misses are worth more than a
 clean-looking record.
 
-Everything from the hook's installation onward is captured automatically.
+One more gap, for the same reason: **the session that installed the hook is not
+in the log either.** Claude Code reads `.claude/settings.json` when a session
+starts, so a hook written mid-session does not apply to the session that wrote
+it. That session also did the four fixes committed after `e02b591` -- the seed
+library, the viewport test fixes, the CI change, and the reduced-motion scroll
+fix -- so those commits have no matching log entries. Every session started after
+it does.
+
+Everything from the next session onward is captured automatically, with no
+further action needed.
 
 ## Tool and model
 
