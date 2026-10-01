@@ -19,5 +19,18 @@
       "class_name": "ProcessMeetingWorkflow"
     }
   ],
+  // Per-address limits on sign-in/sign-up/reset, per-account limits on changes.
+  "ratelimits": [
+    {
+      "name": "AUTH_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 10, "period": 60 }
+    },
+    {
+      "name": "API_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 120, "period": 60 }
+    }
+  ],
   "observability": { "enabled": true }
 }

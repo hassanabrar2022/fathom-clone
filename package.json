@@ -13,8 +13,8 @@
     "test:e2e": "playwright test",
     "deploy": "npm run build && wrangler deploy",
     "dev:api": "npm run build && wrangler dev --port 8788",
-    "seed:reviewer": "node scripts/seed-reviewer.mjs",
-    "dev:web": "vite --host 0.0.0.0"
+    "dev:web": "vite --host 0.0.0.0",
+    "audit:secrets": "node scripts/audit-secrets.mjs"
   },
   "engines": {
     "node": ">=22.12"

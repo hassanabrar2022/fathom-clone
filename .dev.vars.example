@@ -1,0 +1,11 @@
+# Copy to .dev.vars for local development, then run
+# `node scripts/setup.mjs secrets` to send the same values to the Worker.
+SUPABASE_URL=https://<project-ref>.supabase.co
+# Supabase dashboard > Settings > API Keys
+SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+R2_ACCOUNT_ID=
+R2_BUCKET_NAME=fathom-clone-uploads
+# Cloudflare dashboard > R2 > Manage API tokens (Object Read & Write, this bucket only)
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=

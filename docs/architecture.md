@@ -1,92 +1,82 @@
-# Fathom Clone data and application architecture
+# Architecture
 
 ```text
-Browser → Cloudflare Pages public site + React app
-        → Worker API → Supabase Auth (server publishable key)
-                     → Supabase Postgres (server service role)
-                     → Private R2 recordings
-                     → Workers AI for new upload processing only
+Browser ──► Cloudflare Worker ──► Supabase Auth      (sign-in, sessions)
+   │          │  (static app +  ──► Supabase Postgres (service role, server only)
+   │          │   /api/*)       ──► R2 (S3 API)       (recordings)
+   │          └─► Workflow ─────► Workers AI          (Whisper, Llama)
+   └──────────── presigned PUT ─► R2 staging/
 ```
 
-The same server-only database adapter serves reviewer content and private uploads.
-Public reviewer content uses `reviewer_meetings`; private recordings use
-`uploaded_meetings`. Separate tables preserve the explicit public/private boundary.
-RLS is enabled and direct anon/authenticated-role access is revoked on every table.
-No database, storage, or Supabase Auth key is present in the browser bundle. The Worker verifies access tokens with Supabase Auth and keeps access/refresh tokens in Secure HttpOnly same-site cookies.
+## Request flow
 
-## Reviewer seed and ordinary reads
+- `apps/worker/src/index.ts` serves the built React app from Workers static
+  assets and routes `/api/*` through the Worker. Every API response gets
+  security headers; static responses get the CSP generated at build time
+  (`vite.config.ts` hashes the inline theme script).
+- `/api/auth/*` (`auth.ts`) proxies Supabase Auth. Access and refresh tokens
+  live only in `__Host-` `HttpOnly; Secure; SameSite=Lax` cookies. Writes must
+  come from the app's own origin.
+- Every other API request first resolves the session (`prepareAccountRequest`).
+  Access tokens are verified locally against the project's ES256 signing keys
+  (`jwt.ts`, JWKS cached 10 minutes); other tokens fall back to Supabase's
+  `/auth/v1/user`. Expired access tokens are refreshed transparently. The
+  verified user id is passed internally in `X-Fathom-Clone-Verified-User`,
+  which is stripped from incoming requests.
+- `ingestion.ts` handles uploads, playback, deletion, speaker names, and meeting
+  share links; `library.ts` handles moments, moment links, and search.
+- `security.ts` applies Workers rate limiting: auth attempts per address and
+  route, changes per account, and public link lookups per address.
 
-`supabase/seeds/reviewer-meetings.json` is the explicit, publishable seed source:
-one permissioned recording with imported transcript/prepared intelligence, plus
-three labeled synthetic examples. `npm run seed:reviewer` applies the additive
-migration, upserts the data, verifies access isolation, and preserves existing
-random share tokens. The application never imports this JSON. Tests may import it
-as a deterministic fixture. Missing backend data yields loading, empty, or retry
-states; it never falls back to bundled meetings.
+## Data model
 
-`GET /api/meetings` returns metadata only. Details and recording/transcript data
-load on opening a meeting. `GET /api/uploads` returns lightweight owner-scoped
-rows without transcript/intelligence payloads. Dashboard thumbnails are small
-images; the dashboard does not request recording bytes.
+All tables have RLS enabled with no policies and no `anon`/`authenticated`
+grants: only the Worker's service role can reach them, and every query is
+filtered by the signed-in `user_id`.
 
-Search is a debounced (250ms), abortable `GET /api/search` request. The Worker
-searches persisted public metadata/passages plus the current owner's uploaded
-transcripts and summaries. It returns matching snippets and timestamps, not full
-transcripts. This is bounded lexical search; there is no vector/RAG infrastructure.
+| Table | Purpose |
+| --- | --- |
+| `meetings` | One upload: media metadata, status/progress, processing lease and attempts, transcript and AI notes (jsonb), speaker names. `user_id → auth.users on delete cascade`. |
+| `meeting_shares` | One revocable public token per meeting. |
+| `meeting_moments` | Saved ranges with an optional public token. Cascades with its meeting and user. |
 
-## Playback, summaries, and moments
+`reserve_upload()` creates a meeting row while enforcing the per-user daily and
+in-progress limits under an advisory lock. `expire_stalled_meetings()` runs
+every 15 minutes (pg_cron) and marks processing that stopped writing for 45
+minutes, or uploads that never arrived within a day, as failed so the owner can
+retry.
 
-The public sanitized recording remains an intentional Pages media asset. A narrow
-Function returns correct byte ranges (206/416, HEAD, If-Range), because plain Pages
-asset responses did not support the required seeking behavior. Uploaded media is
-private in R2 and streamed through authorized byte-range endpoints. Player elements
-preload metadata only and retain native media controls.
+Deleting an account removes every R2 object first, then the Supabase user;
+the database cascades remove all rows.
 
-Transcript/media/summary source timestamps use seconds. Moment ranges use integer
-milliseconds; conversion at the player/API boundary is deliberate. Zod validates
-ordering, speaker references, moment bounds, and summary source bounds. Playback
-events drive active turns and optional follow-scroll. Seeking before media metadata
-loads is queued. Media failure leaves the transcript available.
+## Upload and processing
 
-Three summary perspectives are persisted and switch without model calls. Prepared
-reviewer output is explicitly labeled; uploaded recordings use Whisper and Llama.
-No backend failure turns into prepared/fake success data.
+1. `POST /api/uploads` reserves a row (validated type, size, duration).
+2. The browser uploads to `staging/<id>/media` with a 5-minute presigned PUT.
+   Recordings over two minutes also get a browser-made 16 kHz mono WAV at
+   `staging/<id>/audio`. Anything left in `staging/` expires after a day.
+3. `POST /api/uploads/:id/process` claims the meeting (new lease, attempt + 1,
+   guarded by the previous attempt count) and starts a
+   `ProcessMeetingWorkflow` instance, then returns immediately. The page polls
+   `GET /api/uploads/:id` for progress.
+4. The workflow (`workflow.ts` → `processing.ts`) runs these steps, each retried
+   on its own:
+   - **store upload:** verify size/type and copy staging into
+     `uploads/<id>/media`, so a still-valid upload URL can't change the media;
+   - **transcribe:** whole file, or one step per two-minute WAV chunk, saving
+     the transcript after each chunk;
+   - **analyze:** Llama returns JSON for three summary views and action items,
+     validated with zod (every cited timestamp must fall inside the recording);
+   - **finish** or **record failure** (`upload_failed`, `transcription_failed`,
+     `analysis_failed`).
 
-Saved moments live in `meeting_moments`, scoped to the meeting and guest or account owner.
-Saving has a retryable failure state and stable request identity. Seed moments have
-no owner. Public-seed moments get random, stored share tokens; title/range/note come
-from the database, not URL query parameters. Private moments remain private, and
-users may explicitly share their full uploaded meeting. Deleting a meeting also
-cleans its moment rows through a database trigger.
+   Every write is filtered by the run's lease, so a superseded run can't
+   overwrite a newer one. A failed meeting can be retried and resumes from the
+   last saved step (up to 6 attempts).
 
-Reviewer speaker edits persist in `reviewer_speaker_names` for the visitor's guest or account
-session; they cannot change the canonical public recording for other reviewers.
-Private speaker edits persist alongside the uploaded recording. Guest ownership lasts seven days; retain the original browser cookie until the data is linked to an account. Sign-in migrates guest-owned uploads, moments, and speaker names to a stable account owner hash. Account API requests revalidate the Supabase session before ownership is used. The assessment deployment disables email confirmation, so signup returns a session immediately. If confirmation is enabled later, the allowlisted `/auth/confirm` callback and a one-hour HttpOnly pending-signup cookie bind the link to the signup browser. A link opened in a different browser confirms the email but asks the user to sign in. Password recovery is not implemented.
-Legacy browser-storage data is not used as a production fallback.
+## Sharing
 
-## Public sharing
-
-`reviewer_meeting_shares` stores full reviewer-meeting tokens.
-`uploaded_meeting_shares` stores owner-created, revocable private-meeting tokens.
-Both resolve through `/api/shares/:token`; private share media is independently
-authorized on each request. Public moment links resolve through `/api/moments/:token`.
-No fixed share token or hardcoded meeting-ID lookup exists in a React share page.
-The public seeded media itself is deliberately public; a moment is a timed view,
-not a separately transcoded or access-restricted clip.
-
-## Upload pipeline and consistency
-
-```text
-Create owner-scoped row → signed R2 PUT → verify/freeze playback object
-→ real Whisper segments → persist transcript → real Llama analysis → complete
-```
-
-The transcript is saved before analysis. Retry reuses saved work; a three-minute
-lease prevents concurrent processing. Polling stops on complete/failed states.
-Quotas cap uploads, duration, storage rows, retries, and saved moments per guest.
-This is a bounded foreground workflow, not a durable background queue.
-
-Deletion is owner-only and idempotently removes R2 objects before deleting the
-row. Database foreign keys/triggers clean associated shares/moments. Distributed
-storage/database deletion is not transactional; interrupted cleanup can be retried.
-API errors are sanitized and never forward raw provider errors or storage keys.
+`/share/meeting-<token>` and `/share/moment-<token>` are public pages. Their
+APIs (`/api/shares/:token`, `/api/moments/:token`) return only that meeting's
+title, transcript, and AI notes, and stream its media through the Worker with
+byte ranges. Revoking a link disables the token immediately.

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { IngestionEnv } from './ingestion';
 import { deleteAllUserMedia } from './ingestion';
 import { ApiError, json, verifiedUserHeader } from './database';
+import { verifyAccessToken } from './jwt';
 
 type AuthEnv = IngestionEnv & { SUPABASE_PUBLISHABLE_KEY?: string };
 type AuthUser = { id: string; email: string };
@@ -92,6 +93,12 @@ const unavailable = () =>
     'Account session check is temporarily unavailable. Please retry.',
   );
 async function verify(env: AuthEnv, access: string): Promise<AuthUser | null> {
+  try {
+    const local = await verifyAccessToken(env.SUPABASE_URL, access);
+    if (local !== undefined) return local;
+  } catch (error) {
+    console.warn('Local session check unavailable; asking Supabase', error);
+  }
   const response = await provider(env, 'user', 'GET', undefined, access);
   if (response.status === 401 || response.status === 403) return null;
   if (!response.ok) throw unavailable();
