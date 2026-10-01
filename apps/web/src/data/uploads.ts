@@ -15,9 +15,7 @@ export async function uploadApi(path: string, method = 'GET', body?: unknown) {
   const response = await fetch(`/api/${path}`, {
     method,
     credentials: 'same-origin',
-    signal: AbortSignal.timeout(
-      method === 'POST' && path.endsWith('/process') ? 175000 : 20000,
-    ),
+    signal: AbortSignal.timeout(20000),
     headers: method === 'GET' ? {} : { 'Content-Type': 'application/json' },
     body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
   });

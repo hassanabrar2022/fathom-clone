@@ -5,14 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "tsc --noEmit && vite build && node scripts/build-worker.mjs",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "deploy": "npm run build && wrangler pages deploy apps/web/dist --project-name fathom-clone",
-    "dev:api": "npm run build && wrangler pages dev apps/web/dist --port 8788",
+    "deploy": "npm run build && wrangler deploy",
+    "dev:api": "npm run build && wrangler dev --port 8788",
     "seed:reviewer": "node scripts/seed-reviewer.mjs",
     "dev:web": "vite --host 0.0.0.0"
   },

@@ -69,13 +69,11 @@ async function main() {
       process.execPath,
       [
         resolve(project, 'node_modules/wrangler/bin/wrangler.js'),
-        'pages',
         'dev',
-        'apps/web/dist',
         '--port',
         '8788',
       ],
-      'Pages API',
+      'Worker API',
     );
     let ready = false;
     for (let attempt = 0; attempt < 60 && !stopping; attempt++) {
@@ -85,9 +83,9 @@ async function main() {
       }
       await new Promise((done) => setTimeout(done, 1000));
     }
-    if (!ready) throw new Error('Pages API did not become ready on port 8788.');
+    if (!ready) throw new Error('Worker API did not become ready on port 8788.');
   } else {
-    console.log('Using the Fathom Clone Pages API already running on port 8788.');
+    console.log('Using the Fathom Clone Worker API already running on port 8788.');
   }
 
   const existingVite = await viteReady();

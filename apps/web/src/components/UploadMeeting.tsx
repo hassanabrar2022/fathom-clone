@@ -403,9 +403,9 @@ export function UploadedMeetingDetail({ id }: { id: string }) {
           : meeting.status === 'complete'
             ? 'No spoken content was detected. You can still play the recording.'
             : meeting.status === 'analyzing'
-              ? 'Transcript saved. Creating summaries and finding supported action items…'
+              ? 'Transcript saved. Creating summaries and finding supported action items… You can leave this page.'
               : meeting.status === 'transcribing'
-                ? 'Listening to your recording and adding timestamps…'
+                ? 'Listening to your recording and adding timestamps… You can leave this page; processing continues.'
                 : transfer?.confirmed
                   ? 'Upload confirmed. Starting transcription…'
                   : transfer?.progress === 100 && !transfer.error
@@ -451,21 +451,15 @@ export function UploadedMeetingDetail({ id }: { id: string }) {
           <Upload size={15} /> Choose recording to retry
         </button>
       ) : (
-        meeting.status !== 'complete' && (
+        (meeting.status === 'failed' ||
+          (meeting.status === 'uploading' && transfer?.confirmed)) && (
           <button
             className="secondary-button"
-            disabled={
-              running ||
-              (meeting.status === 'uploading' && !!transfer && !transfer.error)
-            }
+            disabled={running}
             onClick={() => void process()}
           >
             <RotateCcw size={15} />
-            {running
-              ? 'Processing…'
-              : meeting.status === 'failed'
-                ? 'Retry processing'
-                : 'Check / resume processing'}
+            {running ? 'Starting…' : 'Retry processing'}
           </button>
         )
       )}

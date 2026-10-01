@@ -1,6 +1,7 @@
 import { ingestionApi, type IngestionEnv } from './ingestion';
 import { appendSessionCookies, authApi, prepareAccountRequest } from './auth';
 import { verifiedUserHeader } from './database';
+export { ProcessMeetingWorkflow } from './workflow';
 type AssetBinding = { fetch(request: Request): Promise<Response> };
 
 export default {
