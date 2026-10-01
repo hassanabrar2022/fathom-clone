@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { useAuth } from './auth-state';
 
 const Marketing = lazy(() =>
   import('./Marketing').then((module) => ({ default: module.MarketingHome })),
@@ -10,8 +11,17 @@ const Login = lazy(() =>
 const Confirm = lazy(() =>
   import('./Auth').then((module) => ({ default: module.AuthCallback })),
 );
+const Forgot = lazy(() =>
+  import('./Auth').then((module) => ({ default: module.ForgotPassword })),
+);
+const Reset = lazy(() =>
+  import('./Auth').then((module) => ({ default: module.ResetPassword })),
+);
 const Product = lazy(() =>
   import('./App').then((module) => ({ default: module.App })),
+);
+const Shared = lazy(() =>
+  import('./App').then((module) => ({ default: module.ShareRoute })),
 );
 
 function RouteLoading() {
@@ -21,6 +31,19 @@ function RouteLoading() {
     </div>
   );
 }
+
+/** The workspace is for signed-in users; send everyone else to sign in. */
+function RequireAccount({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  if (loading) return <RouteLoading />;
+  if (!user) {
+    const next = `${location.pathname}${location.search}`;
+    return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace />;
+  }
+  return children;
+}
+
 export function Root() {
   return (
     <Suspense fallback={<RouteLoading />}>
@@ -28,10 +51,19 @@ export function Root() {
         <Route path="/" element={<Marketing />} />
         <Route path="/login" element={<Login mode="login" />} />
         <Route path="/signup" element={<Login mode="signup" />} />
+        <Route path="/forgot-password" element={<Forgot />} />
         <Route path="/auth/confirm" element={<Confirm />} />
-        <Route path="/app/*" element={<Product />} />
-        <Route path="/share/:token" element={<Product />} />
-        <Route path="*" element={<Product />} />
+        <Route path="/auth/reset" element={<Reset />} />
+        <Route path="/share/:token" element={<Shared />} />
+        <Route
+          path="/app/*"
+          element={
+            <RequireAccount>
+              <Product />
+            </RequireAccount>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
   );

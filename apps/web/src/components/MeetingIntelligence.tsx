@@ -55,11 +55,7 @@ export function MeetingIntelligence({
           </span>
           <div>
             <h2 id="intelligence-title">Fathom Clone intelligence</h2>
-            <p>
-              {intelligence.provenance === 'generated'
-                ? 'AI analysis · grounded in your transcript'
-                : 'Prepared analysis · grounded in this recording'}
-            </p>
+            <p>AI analysis · grounded in your transcript</p>
           </div>
         </div>
         <span className="ready-pill">
@@ -168,9 +164,8 @@ export function MeetingIntelligence({
       </section>
 
       <p className="analysis-disclosure">
-        {intelligence.provenance === 'generated'
-          ? 'Generated from this recording. Check the cited transcript before acting on a summary.'
-          : 'Prepared demo output from the supplied transcript. Fathom Clone did not run a live model for this recording.'}
+        Generated from this recording. Check the cited transcript before acting
+        on a summary.
       </p>
     </section>
   );

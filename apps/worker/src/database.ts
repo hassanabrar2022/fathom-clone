@@ -1,4 +1,5 @@
 import type { IngestionEnv } from './ingestion';
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -17,21 +18,36 @@ export function json(value: unknown, status = 200, headers: HeadersInit = {}) {
     },
   });
 }
-export async function owner(request: Request) {
-  const account = request.headers.get('X-Fathom-Clone-Verified-Owner');
-  if (account && /^[a-f0-9]{64}$/.test(account)) return account;
-  const token = request.headers
-    .get('Cookie')
-    ?.match(/(?:^|;\s*)__Host-fathom-clone=([a-f0-9]{64})(?:;|$)/)?.[1];
-  if (!token) return null;
-  const hash = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(token),
-  );
-  return [...new Uint8Array(hash)]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+
+/** Set by the auth layer after the session is verified; never trusted from clients. */
+export const verifiedUserHeader = 'X-Fathom-Clone-Verified-User';
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+export function currentUserId(request: Request) {
+  const id = request.headers.get(verifiedUserHeader);
+  return id && uuidPattern.test(id) ? id : null;
 }
+export function requireUser(request: Request) {
+  const id = currentUserId(request);
+  if (!id) throw new ApiError(401, 'Sign in to continue.');
+  return id;
+}
+export function isUuid(value: string) {
+  return uuidPattern.test(value);
+}
+
+const quotaMessages: Record<string, [number, string]> = {
+  daily_upload_limit: [
+    429,
+    'You have reached today’s upload limit. Please try again tomorrow.',
+  ],
+  too_many_in_progress: [
+    429,
+    'Several recordings are still processing. Wait for one to finish, then upload again.',
+  ],
+};
+
 export async function db(
   env: IngestionEnv,
   path: string,
@@ -56,12 +72,16 @@ export async function db(
   if (!response.ok) {
     const problem = (await response.json().catch(() => null)) as {
       message?: string;
+      code?: string;
     } | null;
-    if (problem?.message === 'upload_quota_reached')
-      throw new ApiError(
-        429,
-        'The demo upload allowance has been reached. Please try again tomorrow.',
-      );
+    const quota = problem?.message ? quotaMessages[problem.message] : undefined;
+    if (quota) throw new ApiError(...quota);
+    console.error('Database request failed', {
+      method,
+      table: path.split(/[?/]/)[0],
+      status: response.status,
+      code: problem?.code,
+    });
     throw new ApiError(
       503,
       'Meeting storage is temporarily unavailable. Please retry.',

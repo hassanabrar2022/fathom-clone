@@ -1,15 +1,8 @@
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import { meetingSchema } from '../../../../packages/shared/meeting';
-import {
-  meetingSearchDocumentSchema,
-  type MeetingSearchResult,
-} from '../../../../packages/shared/search';
-export const librarySchema = meetingSchema.array();
-export const meetingDetailSchema = z.object({
-  meeting: meetingSchema,
-  searchDocument: meetingSearchDocumentSchema,
-});
+import { reportSignedOut } from '../auth-state';
+import type { MeetingSearchResult } from '../../../../packages/shared/search';
 export const searchResultsSchema = z.array(
   z.object({
     meeting: meetingSchema,
@@ -41,6 +34,7 @@ export function useApiData<T>(path: string | undefined, schema: z.ZodType<T>) {
     let disposed = false;
     fetch(path, { signal: controller.signal, credentials: 'same-origin' })
       .then(async (response) => {
+        if (response.status === 401) reportSignedOut();
         if (!response.ok)
           throw new Error(
             response.status === 404 ? 'not-found' : 'unavailable',
@@ -79,7 +73,7 @@ export function useApiData<T>(path: string | undefined, schema: z.ZodType<T>) {
     retry: () => setAttempt((n) => n + 1),
   };
 }
-export function useMeetingSearch(query: string, category: string) {
+export function useMeetingSearch(query: string) {
   const [debounced, setDebounced] = useState(query);
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(query), 250);
@@ -87,7 +81,7 @@ export function useMeetingSearch(query: string, category: string) {
   }, [query]);
   const result = useApiData(
     debounced
-      ? `/api/search?q=${encodeURIComponent(debounced)}&category=${encodeURIComponent(category)}`
+      ? `/api/search?q=${encodeURIComponent(debounced)}`
       : undefined,
     searchResultsSchema,
   );

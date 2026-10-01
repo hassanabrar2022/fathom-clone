@@ -17,6 +17,11 @@ type AuthState = {
   signOut: () => Promise<void>;
 };
 const Context = createContext<AuthState | null>(null);
+const signedOutEvent = 'fathom-clone-signed-out';
+/** Called by API clients when the server reports an expired session. */
+export function reportSignedOut() {
+  window.dispatchEvent(new Event(signedOutEvent));
+}
 export async function accountRequest(
   path: string,
   method = 'GET',
@@ -56,8 +61,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => {
         if (active) setLoading(false);
       });
+    const signedOut = () => setUser(null);
+    window.addEventListener(signedOutEvent, signedOut);
     return () => {
       active = false;
+      window.removeEventListener(signedOutEvent, signedOut);
     };
   }, []);
   const signOut = useCallback(async () => {

@@ -172,7 +172,6 @@ function SharedMeetingExperience({ meeting }: { meeting: SharedMeetingData }) {
                 controls
                 playsInline
                 preload="metadata"
-                poster={meeting.posterUrl}
                 src={meeting.mediaUrl}
                 aria-label={`Shared recording of ${meeting.title}`}
                 onLoadedMetadata={() => {

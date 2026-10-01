@@ -7,12 +7,7 @@ dist/
 .wrangler/
 test-results/
 playwright-report/
-# Local reference evidence is not cleared for public redistribution.
-fathom-ui-and-meeting-summary/
-
 .dev.vars
 .dev.vars.*
 !.dev.vars.example
 
-# Local visual reference export, not application source
-lumora-ai-copy-site/

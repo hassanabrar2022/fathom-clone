@@ -44,7 +44,7 @@ const actionItemSchema = z.object({
 });
 
 export const intelligenceSchema = z.object({
-  provenance: z.enum(['prepared-demo', 'generated']),
+  provenance: z.literal('generated'),
   templates: z.array(summaryTemplateSchema).length(3),
   actions: z.array(actionItemSchema),
 });
@@ -76,18 +76,15 @@ export const meetingMomentSchema = z
     path: ['endMs'],
   });
 
+/** Everything the meeting player needs: media, transcript, and AI notes. */
 export const recordingSchema = z
   .object({
     id: z.string().min(1),
-    description: z.string().optional(),
-    sourceNote: z.string().optional(),
-    mediaUrl: z.string().startsWith('/media/'),
-    posterUrl: z.string().startsWith('/media/'),
+    mediaUrl: z.string().startsWith('/'),
     duration: z.number().positive(),
     speakers: z.array(z.object({ id: z.string(), name: z.string() })).min(1),
     segments: z.array(segmentSchema),
-    intelligence: intelligenceSchema,
-    moments: z.array(meetingMomentSchema),
+    intelligence: intelligenceSchema.nullable(),
   })
   .superRefine((recording, context) => {
     const ids = new Set<string>();
@@ -108,69 +105,11 @@ export const recordingSchema = z
       }
       ids.add(segment.id);
     });
-    const templateKeys = new Set(
-      recording.intelligence.templates.map((template) => template.key),
-    );
-    for (const required of summaryTemplateKeySchema.options) {
-      if (!templateKeys.has(required)) {
-        context.addIssue({
-          code: 'custom',
-          path: ['intelligence', 'templates'],
-          message: `Missing ${required} summary template`,
-        });
-      }
-    }
-    recording.intelligence.templates.forEach((template, templateIndex) => {
-      template.sections.forEach((section, sectionIndex) => {
-        section.items.forEach((item, itemIndex) => {
-          if (item.source > recording.duration) {
-            context.addIssue({
-              code: 'custom',
-              path: [
-                'intelligence',
-                'templates',
-                templateIndex,
-                'sections',
-                sectionIndex,
-                'items',
-                itemIndex,
-                'source',
-              ],
-              message: 'Summary source exceeds recording duration',
-            });
-          }
-        });
-      });
-    });
-    recording.intelligence.actions.forEach((action, index) => {
-      if (action.source > recording.duration) {
-        context.addIssue({
-          code: 'custom',
-          path: ['intelligence', 'actions', index, 'source'],
-          message: 'Action source exceeds recording duration',
-        });
-      }
-    });
-    const momentIds = new Set<string>();
-    recording.moments.forEach((moment, index) => {
-      if (
-        momentIds.has(moment.id) ||
-        moment.meetingId !== recording.id ||
-        moment.endMs > recording.duration * 1000
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['moments', index],
-          message: 'Invalid moment identity, meeting reference, or time range',
-        });
-      }
-      momentIds.add(moment.id);
-    });
   });
 
 export type Recording = z.infer<typeof recordingSchema>;
 export type Segment = z.infer<typeof segmentSchema>;
-export type MeetingIntelligence = Recording['intelligence'];
+export type MeetingIntelligence = z.infer<typeof intelligenceSchema>;
 export type SummaryTemplateKey = z.infer<typeof summaryTemplateKeySchema>;
 export const persistedMomentSchema = meetingMomentSchema.safeExtend({
   sharePath: z.string().startsWith('/share/').optional(),

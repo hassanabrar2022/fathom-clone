@@ -13,16 +13,16 @@ import {
 import { formatTime } from '../../../../packages/shared/meeting';
 import {
   persistedMomentSchema,
-  recordingSchema,
   type MeetingMoment,
-  type Recording,
 } from '../../../../packages/shared/recording';
+import {
+  sharedMeetingSchema,
+  type SharedMeeting,
+} from '../../../../packages/shared/sharing';
 import { z } from 'zod';
-import { meetingSchema } from '../../../../packages/shared/meeting';
 import { useApiData } from '../data/meetings';
 const sharedMomentDataSchema = z.object({
-  meeting: meetingSchema,
-  recording: recordingSchema,
+  recording: sharedMeetingSchema,
   moment: persistedMomentSchema,
 });
 import './shared-moment.css';
@@ -36,7 +36,6 @@ export function SharedMoment() {
   );
   const recording = loaded.data?.recording;
   const moment = loaded.data?.moment;
-  const meeting = loaded.data?.meeting;
   const error = loaded.error;
   useEffect(() => {
     document.title = 'Shared moment · Fathom Clone';
@@ -45,7 +44,7 @@ export function SharedMoment() {
   return (
     <div className="share-page">
       <header className="share-topbar">
-        <Link className="share-brand" to="/app" aria-label="Fathom Clone home">
+        <Link className="share-brand" to="/" aria-label="Fathom Clone home">
           <span>
             <AudioLines size={19} />
           </span>
@@ -83,12 +82,12 @@ export function SharedMoment() {
               <span />
             </div>
           </section>
-        ) : !moment || !meeting ? (
+        ) : !moment ? (
           <InvalidShare />
         ) : (
           <SharedMomentExperience
-            meetingTitle={meeting.title}
-            meetingSummary={meeting.summary}
+            meetingTitle={recording.title}
+            meetingSummary={recording.description}
             recording={recording}
             moment={moment}
           />
@@ -107,7 +106,7 @@ function InvalidShare() {
       <Share2 size={30} />
       <h1>This shared moment isn’t available</h1>
       <p>The link may be incomplete or its time range is no longer valid.</p>
-      <Link className="primary-button" to="/app">
+      <Link className="primary-button" to="/">
         <ArrowLeft size={16} /> Explore Fathom Clone
       </Link>
     </section>
@@ -122,7 +121,7 @@ function SharedMomentExperience({
 }: {
   meetingTitle: string;
   meetingSummary: string;
-  recording: Recording;
+  recording: SharedMeeting;
   moment: MeetingMoment;
 }) {
   const video = useRef<HTMLVideoElement>(null);
@@ -173,7 +172,6 @@ function SharedMomentExperience({
               controls
               playsInline
               preload="metadata"
-              poster={recording.posterUrl}
               src={recording.mediaUrl}
               aria-label={`Shared moment from ${meetingTitle}`}
               onLoadedMetadata={() => {

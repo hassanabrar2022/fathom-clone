@@ -147,15 +147,12 @@ export function UploadMeeting() {
             />
           </label>
           <p className="upload-privacy">
-            <LockKeyhole size={16} /> Your upload is private by default. Keep
-            this browser’s cookies to return later or revoke a link you choose
-            to share. It is processed by Cloudflare AI and stored in Fathom Clone’s
-            private storage.
+            <LockKeyhole size={16} /> Your recording is private to your account
+            until you choose to share it. It is stored in private storage and
+            transcribed and summarized by Cloudflare Workers AI.
           </p>
           <p className="upload-consent">
-            Upload only recordings you have permission to process. Demo
-            allowance: 3 recordings per browser per day, subject to workspace
-            capacity.
+            Upload only recordings you have permission to process.
           </p>
           {error && (
             <p className="upload-error" role="alert">
@@ -217,8 +214,17 @@ export function UploadMeeting() {
   );
 }
 
-export function UploadedLibrary({ query }: { query: string }) {
-  const [items, setItems] = useState<UploadedMeeting[]>([]);
+const statusLabels: Record<UploadedMeeting['status'], string> = {
+  uploading: 'Uploading',
+  uploaded: 'Uploaded',
+  transcribing: 'Transcribing',
+  analyzing: 'Summarizing',
+  complete: 'Ready',
+  failed: 'Needs attention',
+};
+
+export function MeetingLibrary() {
+  const [items, setItems] = useState<UploadedMeeting[] | null>(null);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -239,67 +245,79 @@ export function UploadedLibrary({ query }: { query: string }) {
   }, [attempt]);
   if (error)
     return (
-      <div className="uploads-notice">
-        Your private recordings couldn’t load.{' '}
+      <div className="empty-state" role="alert">
+        <h3>Meetings couldn’t load</h3>
+        <p>Check your connection and try again.</p>
         <button
+          className="secondary-button"
           onClick={() => {
             setError(false);
+            setItems(null);
             setAttempt((value) => value + 1);
           }}
         >
-          Retry private library
+          Retry meetings
         </button>
       </div>
     );
-  if (!items.length) return null;
-  const needle = query.trim().toLowerCase();
-  const matches = items.filter((item) =>
-    `${item.title} ${item.intelligence?.templates.map((t) => t.overview).join(' ') ?? ''} ${item.transcript?.flatMap((s) => s.paragraphs).join(' ') ?? ''}`
-      .toLowerCase()
-      .includes(needle),
-  );
+  if (!items)
+    return (
+      <div className="empty-state" role="status">
+        <h3>Loading meetings…</h3>
+        <div className="loading-lines" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+      </div>
+    );
+  if (!items.length)
+    return (
+      <div className="empty-state">
+        <Upload size={30} />
+        <h3>No meetings yet</h3>
+        <p>
+          Upload a recording to get a searchable transcript, summaries, and
+          action items.
+        </p>
+        <Link className="primary-button" to="/app/upload">
+          <Upload size={16} /> Upload your first recording
+        </Link>
+      </div>
+    );
   return (
-    <section className="uploaded-library" aria-label="Your private recordings">
+    <section className="uploaded-library" aria-label="Your meetings">
       <div className="library-heading">
         <h2>
           Your recordings <span>{items.length}</span>
         </h2>
       </div>
-      {!matches.length && <p>No private recordings match this search.</p>}
-      {matches.map((item) => {
-        const segment = needle
-          ? item.transcript?.find((s) =>
-              s.paragraphs.join(' ').toLowerCase().includes(needle),
-            )
-          : null;
-        return (
-          <Link
-            className="uploaded-row"
-            key={item.id}
-            to={`/app/meetings/${item.id}${segment ? `?t=${segment.start}&q=${encodeURIComponent(query)}` : ''}`}
-          >
-            <span className="upload-row-icon">
-              <AudioLines size={20} />
-            </span>
-            <div>
-              <strong>{item.title}</strong>
-              <p>
-                {segment
-                  ? `${formatTime(segment.start)} · ${segment.paragraphs.join(' ')}`
-                  : `${formatTime(item.duration_seconds)} · ${new Date(item.created_at).toLocaleDateString()}`}
-              </p>
-            </div>
-            <span className={`upload-status ${item.status}`}>
-              {item.status === 'complete'
-                ? 'Ready'
-                : item.status === 'failed'
-                  ? 'Needs attention'
-                  : item.status}
-            </span>
-            <ArrowRight size={16} />
-          </Link>
-        );
-      })}
+      {items.map((item) => (
+        <Link
+          className="uploaded-row"
+          key={item.id}
+          to={`/app/meetings/${item.id}`}
+        >
+          <span className="upload-row-icon">
+            <AudioLines size={20} />
+          </span>
+          <div>
+            <strong>{item.title}</strong>
+            <p>
+              {formatTime(item.duration_seconds)} ·{' '}
+              {new Date(item.created_at).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })}
+            </p>
+          </div>
+          <span className={`upload-status ${item.status}`}>
+            {statusLabels[item.status]}
+          </span>
+          <ArrowRight size={16} />
+        </Link>
+      ))}
     </section>
   );
 }
@@ -514,7 +532,7 @@ export function UploadedMeetingDetail({ id }: { id: string }) {
             />
           </div>
           {meeting.status === 'complete' && (
-            <MeetingShareControl meetingId={meeting.id} privateMeeting />
+            <MeetingShareControl meetingId={meeting.id} />
           )}
           <input
             hidden
@@ -533,7 +551,6 @@ export function UploadedMeetingDetail({ id }: { id: string }) {
           ) : (
             <RecordingExperience
               key={`${id}-${seek ?? 'start'}`}
-              privateMeeting
               initialSeek={
                 seek !== undefined && Number.isFinite(seek) ? seek : undefined
               }
@@ -550,7 +567,6 @@ export function UploadedMeetingDetail({ id }: { id: string }) {
                 ],
                 segments: meeting.transcript,
                 intelligence: meeting.intelligence,
-                moments: [],
               }}
               meetingTitle={meeting.title}
               analysisFeedback={feedback}

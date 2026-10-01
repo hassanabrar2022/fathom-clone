@@ -13,7 +13,6 @@ export const sharedMeetingSchema = z.object({
   duration: z.number().positive(),
   mediaUrl: z.string().startsWith('/'),
   mediaType: z.string(),
-  posterUrl: z.string().startsWith('/media/').optional(),
   speakers: z.array(z.object({ id: z.string(), name: z.string() })).min(1),
   segments: z.array(segmentSchema),
   intelligence: intelligenceSchema.nullable(),

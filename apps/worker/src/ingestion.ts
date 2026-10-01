@@ -1,5 +1,5 @@
-import { ApiError, db, json, owner } from './database';
-import { reviewerApi } from './reviewer';
+import { ApiError, db, isUuid, json, requireUser } from './database';
+import { libraryApi, publicMomentApi } from './library';
 import { AwsClient } from 'aws4fetch';
 import { z } from 'zod';
 import {
@@ -29,8 +29,8 @@ export type IngestionEnv = {
   R2_SECRET_ACCESS_KEY: string;
   AI: { run(model: string, input: unknown): Promise<unknown> };
 };
-const rowSchema = uploadedMeetingSchema.extend({
-  owner_hash: z.string(),
+export const rowSchema = uploadedMeetingSchema.extend({
+  user_id: z.string().uuid(),
   storage_key: z.string(),
   media_size: z.number(),
   processing_lease: z.string().nullable(),
@@ -38,7 +38,7 @@ const rowSchema = uploadedMeetingSchema.extend({
   processing_attempts: z.number(),
   media_uploaded_at: z.string().nullable(),
 });
-type Row = z.infer<typeof rowSchema>;
+export type Row = z.infer<typeof rowSchema>;
 const shareRowSchema = z.object({
   meeting_id: z.string().uuid(),
   token: privateShareTokenSchema,
@@ -56,7 +56,7 @@ const renameSpeakerSchema = z.object({
       'Use a plain speaker name',
     ),
 });
-function s3(env: IngestionEnv) {
+export function s3(env: IngestionEnv) {
   return new AwsClient({
     accessKeyId: env.R2_ACCESS_KEY_ID,
     secretAccessKey: env.R2_SECRET_ACCESS_KEY,
@@ -65,7 +65,7 @@ function s3(env: IngestionEnv) {
     retries: 1,
   });
 }
-function objectUrl(env: IngestionEnv, key: string) {
+export function objectUrl(env: IngestionEnv, key: string) {
   return `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${env.R2_BUCKET_NAME}/${key}`;
 }
 async function deleteStoredMedia(env: IngestionEnv, row: Row) {
@@ -95,6 +95,17 @@ async function deleteStoredMedia(env: IngestionEnv, row: Row) {
       'The stored recording could not be removed. Nothing else was deleted; please retry.',
     );
   }
+}
+
+/** Removes every stored recording before an account is deleted. */
+export async function deleteAllUserMedia(env: IngestionEnv, userId: string) {
+  const rows = rowSchema
+    .array()
+    .parse(await db(env, `meetings?user_id=eq.${userId}&limit=10000`));
+  for (let index = 0; index < rows.length; index += 10)
+    await Promise.all(
+      rows.slice(index, index + 10).map((row) => deleteStoredMedia(env, row)),
+    );
 }
 
 // Keep model inputs small even when the original video is long. The browser
@@ -219,14 +230,11 @@ async function readWavChunk(
   wav.set(data, WAV_HEADER_BYTES);
   return wav;
 }
-async function getRow(env: IngestionEnv, id: string, ownerHash: string) {
+export async function getRow(env: IngestionEnv, id: string, userId: string) {
   const rows = rowSchema
     .array()
-    .parse(
-      await db(env, `uploaded_meetings?id=eq.${id}&owner_hash=eq.${ownerHash}`),
-    );
-  if (!rows[0])
-    throw new ApiError(404, 'This recording is unavailable in this browser.');
+    .parse(await db(env, `meetings?id=eq.${id}&user_id=eq.${userId}`));
+  if (!rows[0]) throw new ApiError(404, 'This recording could not be found.');
   return rows[0];
 }
 async function update(
@@ -240,17 +248,17 @@ async function update(
     .parse(
       await db(
         env,
-        `uploaded_meetings?id=eq.${row.id}&owner_hash=eq.${row.owner_hash}${filter}`,
+        `meetings?id=eq.${row.id}&user_id=eq.${row.user_id}${filter}`,
         'PATCH',
         { ...values, updated_at: new Date().toISOString() },
       ),
     );
 }
-function publicRow(row: Row) {
+export function publicRow(row: Row) {
   return uploadedMeetingSchema.parse(row);
 }
 
-function newShareToken() {
+export function newShareToken() {
   return [...crypto.getRandomValues(new Uint8Array(32))]
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
@@ -259,7 +267,7 @@ function newShareToken() {
 async function findShare(env: IngestionEnv, filter: string) {
   const shares = shareRowSchema
     .array()
-    .parse(await db(env, `uploaded_meeting_shares?${filter}&limit=1`));
+    .parse(await db(env, `meeting_shares?${filter}&limit=1`));
   return shares[0] ?? null;
 }
 
@@ -268,14 +276,18 @@ async function sharedRow(env: IngestionEnv, token: string) {
   if (!share) throw new ApiError(404, 'This shared meeting is unavailable.');
   const rows = rowSchema
     .array()
-    .parse(await db(env, `uploaded_meetings?id=eq.${share.meeting_id}`));
+    .parse(await db(env, `meetings?id=eq.${share.meeting_id}`));
   const row = rows[0];
   if (!row || row.status !== 'complete' || !row.media_uploaded_at)
     throw new ApiError(404, 'This shared meeting is unavailable.');
   return row;
 }
 
-async function mediaResponse(request: Request, env: IngestionEnv, row: Row) {
+export async function mediaResponse(
+  request: Request,
+  env: IngestionEnv,
+  row: Row,
+) {
   if (!row.media_uploaded_at)
     throw new ApiError(404, 'Recording upload has not finished.');
   const range = request.headers.get('Range');
@@ -613,17 +625,8 @@ export async function ingestionApi(request: Request, env: IngestionEnv) {
       if (Number(request.headers.get('Content-Length')) > 4096)
         throw new ApiError(413, 'Request too large.');
     }
-    if (url.pathname === '/api/session' && request.method === 'POST') {
-      if (await owner(request)) return json({ ready: true });
-      const token = [...crypto.getRandomValues(new Uint8Array(32))]
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-      return json({ ready: true }, 200, {
-        'Set-Cookie': `__Host-fathom-clone=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=604800`,
-      });
-    }
-    const reviewerResponse = await reviewerApi(request, env);
-    if (reviewerResponse) return reviewerResponse;
+    const momentResponse = await publicMomentApi(request, env);
+    if (momentResponse) return momentResponse;
     const publicShare = /^\/api\/shares\/([a-f0-9]{64})(?:\/(media))?$/.exec(
       url.pathname,
     );
@@ -655,23 +658,14 @@ export async function ingestionApi(request: Request, env: IngestionEnv) {
         { 'Referrer-Policy': 'no-referrer' },
       );
     }
-    const ownerHash = await owner(request);
-    if (
-      url.pathname === '/api/uploads' &&
-      request.method === 'GET' &&
-      !ownerHash
-    )
-      return json([]);
-    if (!ownerHash)
-      throw new ApiError(
-        401,
-        'Open this recording in the browser used to upload it.',
-      );
+    const userId = requireUser(request);
     if (!env.SUPABASE_URL || !env.R2_ACCESS_KEY_ID || !env.AI)
       throw new ApiError(
         503,
         'Uploads are temporarily unavailable. Please retry shortly.',
       );
+    const libraryResponse = await libraryApi(request, env, userId);
+    if (libraryResponse) return libraryResponse;
     if (url.pathname === '/api/uploads') {
       if (request.method === 'GET') {
         const rows = rowSchema
@@ -679,7 +673,7 @@ export async function ingestionApi(request: Request, env: IngestionEnv) {
           .parse(
             await db(
               env,
-              `uploaded_meetings?owner_hash=eq.${ownerHash}&order=created_at.desc&limit=100`,
+              `meetings?user_id=eq.${userId}&order=created_at.desc&limit=500`,
             ),
           );
         return json(
@@ -696,7 +690,7 @@ export async function ingestionApi(request: Request, env: IngestionEnv) {
         const input = createUploadSchema.parse(JSON.parse(body));
         const rows = rowSchema.array().parse(
           await db(env, 'rpc/reserve_upload', 'POST', {
-            p_owner: ownerHash,
+            p_user: userId,
             p_title: input.title,
             p_filename: input.filename,
             p_type: input.contentType,
@@ -711,9 +705,9 @@ export async function ingestionApi(request: Request, env: IngestionEnv) {
       /^\/api\/uploads\/([a-f0-9-]{36})(?:\/(upload-url|process|media|share|speakers))?$/.exec(
         url.pathname,
       );
-    if (!match || !z.string().uuid().safeParse(match[1]).success)
+    if (!match || !isUuid(match[1]))
       throw new ApiError(404, 'Recording not found.');
-    const row = await getRow(env, match[1], ownerHash);
+    const row = await getRow(env, match[1], userId);
     if (!match[2] && request.method === 'GET') return json(publicRow(row));
     if (!match[2] && request.method === 'DELETE') {
       await deleteStoredMedia(env, row);
@@ -722,7 +716,7 @@ export async function ingestionApi(request: Request, env: IngestionEnv) {
         .parse(
           await db(
             env,
-            `uploaded_meetings?id=eq.${row.id}&owner_hash=eq.${row.owner_hash}`,
+            `meetings?id=eq.${row.id}&user_id=eq.${row.user_id}`,
             'DELETE',
           ),
         );
@@ -767,8 +761,8 @@ export async function ingestionApi(request: Request, env: IngestionEnv) {
         const token = newShareToken();
         const method = existing ? 'PATCH' : 'POST';
         const path = existing
-          ? `uploaded_meeting_shares?meeting_id=eq.${row.id}`
-          : 'uploaded_meeting_shares';
+          ? `meeting_shares?meeting_id=eq.${row.id}`
+          : 'meeting_shares';
         const saved = shareRowSchema.array().parse(
           await db(env, path, method, {
             ...(existing ? {} : { meeting_id: row.id }),
@@ -784,7 +778,7 @@ export async function ingestionApi(request: Request, env: IngestionEnv) {
         if (existing?.enabled)
           await db(
             env,
-            `uploaded_meeting_shares?meeting_id=eq.${row.id}`,
+            `meeting_shares?meeting_id=eq.${row.id}`,
             'PATCH',
             { enabled: false },
           );

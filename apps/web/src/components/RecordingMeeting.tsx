@@ -1,13 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
-  ArrowLeft,
   ArrowRight,
-  AudioLines,
   BookmarkPlus,
   ChevronLeft,
   ChevronRight,
-  Clock3,
   Copy,
   Download,
   FileText,
@@ -17,9 +13,8 @@ import {
   RotateCcw,
   Search,
   Pencil,
-  Users,
 } from 'lucide-react';
-import { formatTime, type Meeting } from '../../../../packages/shared/meeting';
+import { formatTime } from '../../../../packages/shared/meeting';
 import {
   transcriptFilename,
   transcriptSegmentText,
@@ -29,158 +24,26 @@ import {
   activeSegment,
   boundedTime,
   momentRange,
-  recordingSchema,
   type Recording,
 } from '../../../../packages/shared/recording';
 import { contextualSnippet } from '../../../../packages/shared/search';
 import { HighlightText } from './MeetingSearch';
 import { MeetingIntelligence } from './MeetingIntelligence';
 import { MeetingMoments, type MomentDraft } from './MeetingMoments';
-import { MeetingShareControl } from './MeetingShareControl';
-import { uploadApi } from '../data/uploads';
 import './recording.css';
-
-export function RecordingMeeting({
-  meeting,
-  initialSeek,
-  searchQuery,
-}: {
-  meeting: Meeting;
-  initialSeek?: number;
-  searchQuery?: string;
-}) {
-  const [recording, setRecording] = useState<Recording | null>(null);
-  const [error, setError] = useState(false);
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 15000);
-    let disposed = false;
-    async function load() {
-      try {
-        const response = await fetch(`/api/meetings/${meeting.id}/recording`, {
-          signal: controller.signal,
-        });
-        if (!response.ok) throw new Error('Recording unavailable');
-        const result = recordingSchema.parse(await response.json());
-        if (!disposed) setRecording(result);
-      } catch {
-        if (!disposed) setError(true);
-      } finally {
-        window.clearTimeout(timeout);
-      }
-    }
-    void load();
-    return () => {
-      disposed = true;
-      controller.abort();
-      window.clearTimeout(timeout);
-    };
-  }, [meeting.id, attempt]);
-
-  return (
-    <>
-      <Link to="/app" className="back-link">
-        <ArrowLeft size={16} /> All meetings
-      </Link>
-      <div className="detail-heading recording-heading">
-        <div>
-          <div className="eyebrow">
-            {meeting.provenance === 'reference-recording' ? 'REFERENCE RECORDING' : 'MEETING RECORDING'} ·{' '}
-            {new Date(meeting.date).toLocaleDateString('en-US', {
-              month: 'long',
-              day: 'numeric',
-              year: 'numeric',
-            })}
-          </div>
-          <h1>{meeting.title}</h1>
-          <div className="detail-meta">
-            <span>
-              <Clock3 size={15} />
-              {formatTime(meeting.duration)}
-            </span>
-            <span>
-              <Users size={15} />
-              {meeting.participants.length} speakers
-            </span>
-            <span className="recording-ready">
-              <span />
-              Recording available
-            </span>
-          </div>
-        </div>
-        <span className="source-badge">
-          <AudioLines size={16} /> Real recording
-        </span>
-      </div>
-      {recording && <MeetingShareControl meetingId={meeting.id} />}
-      {error ? (
-        <section className="recording-load-state" role="alert">
-          <FileText size={30} />
-          <h2>We couldn’t load this meeting</h2>
-          <p>
-            Check your connection and try again. Your meeting is still in the
-            library.
-          </p>
-          <button
-            className="secondary-button"
-            onClick={() => {
-              setError(false);
-              setAttempt((value) => value + 1);
-            }}
-          >
-            <RotateCcw size={16} /> Retry meeting
-          </button>
-        </section>
-      ) : recording ? (
-        <RecordingExperience
-          key={meeting.id}
-          recording={recording}
-          meetingTitle={meeting.title}
-          initialSeek={initialSeek}
-          searchQuery={searchQuery}
-          onRenameSpeaker={async (speakerId, name) => {
-            await uploadApi('session', 'POST');
-            await uploadApi(`meetings/${meeting.id}/speakers`, 'PATCH', {
-              speakerId,
-              name,
-            });
-          }}
-        />
-      ) : (
-        <section className="recording-load-state" role="status">
-          <LoaderCircle className="loading-icon" size={26} />
-          <h2>Loading your conversation</h2>
-          <p>Fetching the recording details and timestamped transcript…</p>
-          <div className="loading-lines" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
-        </section>
-      )}
-    </>
-  );
-}
 
 export function RecordingExperience({
   recording,
   meetingTitle,
   initialSeek,
   searchQuery,
-  privateMeeting = false,
   analysisFeedback,
   onRenameSpeaker,
 }: {
-  recording: Omit<Recording, 'intelligence' | 'posterUrl'> & {
-    intelligence: Recording['intelligence'] | null;
-    posterUrl?: string;
-  };
+  recording: Recording;
   meetingTitle: string;
   initialSeek?: number;
   searchQuery?: string;
-  privateMeeting?: boolean;
   analysisFeedback?: React.ReactNode;
   onRenameSpeaker?: (speakerId: string, name: string) => Promise<void>;
 }) {
@@ -447,13 +310,8 @@ export function RecordingExperience({
             controls
             playsInline
             preload="metadata"
-            poster={recording.posterUrl}
             src={recording.mediaUrl}
-            aria-label={
-              privateMeeting
-                ? 'Uploaded meeting recording'
-                : 'Meeting recording'
-            }
+            aria-label="Meeting recording"
             onLoadedMetadata={ready}
             onCanPlay={() => {
               setState('ready');
@@ -545,23 +403,7 @@ export function RecordingExperience({
             </button>
           </div>
         )}
-        {!privateMeeting && (
-          <div className="recording-context">
-            <div className="card-heading">
-              <AudioLines size={19} />
-              <h2>About this conversation</h2>
-            </div>
-            <p>{recording.description}</p>
-            {recording.sourceNote && (
-              <details className="source-note">
-                <summary>About this recording</summary>
-                <p>{recording.sourceNote}</p>
-              </details>
-            )}
-          </div>
-        )}
         <MeetingMoments
-          privateMeeting={privateMeeting}
           meetingId={recording.id}
           duration={duration}
           draft={momentDraft}
@@ -722,9 +564,7 @@ export function RecordingExperience({
         >
           <div className="transcript-source">
             <FileText size={14} />{' '}
-            {privateMeeting
-              ? 'AI transcript · Speaker identities are not inferred'
-              : 'Imported transcript · Original speaker timestamps'}
+            AI transcript · Speaker identities are not inferred
           </div>
           {recording.segments.length === 0 ? (
             <div className="transcript-empty">

@@ -5,6 +5,7 @@ import {
   uploadLimits,
   type UploadedMeeting,
 } from '../../../../packages/shared/ingestion';
+import { reportSignedOut } from '../auth-state';
 import {
   longRecordingSeconds,
   transcriptionAudio,
@@ -20,6 +21,7 @@ export async function uploadApi(path: string, method = 'GET', body?: unknown) {
     headers: method === 'GET' ? {} : { 'Content-Type': 'application/json' },
     body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
   });
+  if (response.status === 401) reportSignedOut();
   if (!response.ok) {
     const error = (await response.json().catch(() => null)) as {
       message?: string;
@@ -202,7 +204,6 @@ export async function createUpload(
     input.duration > longRecordingSeconds
       ? await transcriptionAudio(file)
       : undefined;
-  await uploadApi('session', 'POST');
   const meeting = uploadedMeetingSchema.parse(
     await uploadApi('uploads', 'POST', { ...input, title }),
   );

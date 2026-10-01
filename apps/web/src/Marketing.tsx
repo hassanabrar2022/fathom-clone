@@ -172,7 +172,7 @@ const faqs = [
   {
     question: 'Do I need a credit card to start?',
     answer:
-      'No. Fathom Clone is free to use in this assessment experience, and account creation does not ask for payment details.',
+      'No. Creating a Fathom Clone account is free and does not ask for payment details.',
   },
 ];
 
@@ -445,7 +445,7 @@ function HeroArt() {
       </div>
       <div className="hero-workflow-content">
         <div className="hero-workflow-label">
-          <span className="art-live-dot" /> SOURCE THREAD · ILLUSTRATIVE
+          <span className="art-live-dot" /> SOURCE THREAD · EXAMPLE
         </div>
         <div className="hero-workflow-steps">
           <div className="hero-workflow-step">
@@ -725,7 +725,7 @@ function Transformation() {
               </div>
               <div className="transform-object">
                 <small>
-                  {stages[active].label.toUpperCase()} / ILLUSTRATIVE
+                  {stages[active].label.toUpperCase()} / EXAMPLE
                 </small>
                 <strong>
                   {active === 0
@@ -787,7 +787,7 @@ function TranscriptStory() {
             can navigate.
           </p>
           <span className="story-caption">
-            ILLUSTRATIVE INTERACTION · SELECT A TIMESTAMP
+            EXAMPLE · SELECT A TIMESTAMP
           </span>
         </div>
         <div className="transcript-demo">
@@ -866,7 +866,7 @@ function SummaryStory() {
           <div
             className="summary-demo-tabs"
             role="group"
-            aria-label="Illustrative summary view"
+            aria-label="Example summary view"
           >
             {perspectives.map((item, index) => (
               <button
@@ -884,7 +884,7 @@ function SummaryStory() {
             className="summary-demo-copy"
             aria-live={interacted ? 'polite' : 'off'}
           >
-            <small>{content.eyebrow} / ILLUSTRATIVE</small>
+            <small>{content.eyebrow} / EXAMPLE</small>
             <h3>{content.title}</h3>
             <p>{content.body}</p>
             <div>
@@ -1057,7 +1057,7 @@ function SearchStory() {
             timestamps into view.
           </p>
           <span className="story-caption">
-            ILLUSTRATIVE SEARCH · TRY “PROPOSAL”
+            EXAMPLE SEARCH · TRY “PROPOSAL”
           </span>
         </div>
         <div className="search-demo">
@@ -1122,7 +1122,7 @@ function MomentsStory() {
           <div
             className="moments-actions"
             role="group"
-            aria-label="Illustrative moment view"
+            aria-label="Example moment view"
           >
             <button
               type="button"
@@ -1153,7 +1153,7 @@ function MomentsStory() {
             <p>One focused moment, with its meeting context attached.</p>
             <span className="moments-public-line" />
           </div>
-          <small>ILLUSTRATIVE FATHOM CLONE VIEW</small>
+          <small>EXAMPLE FATHOM CLONE VIEW</small>
         </div>
         <div className="section-heading">
           <span className="marketing-eyebrow">

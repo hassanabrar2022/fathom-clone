@@ -3,8 +3,11 @@ import {
   BookmarkPlus,
   Copy,
   ExternalLink,
+  Link2,
+  Link2Off,
   Play,
   Share2,
+  Trash2,
   X,
 } from 'lucide-react';
 import { formatTime } from '../../../../packages/shared/meeting';
@@ -31,7 +34,6 @@ export function MeetingMoments({
   onCloseDraft,
   onSeek,
   seekDisabled,
-  privateMeeting = false,
 }: {
   meetingId: string;
   duration: number;
@@ -39,24 +41,21 @@ export function MeetingMoments({
   onCloseDraft: () => void;
   onSeek: (time: number) => void;
   seekDisabled: boolean;
-  privateMeeting?: boolean;
 }) {
   const panel = useRef<HTMLElement>(null);
-  const stored = useApiData(
-    `/api/meetings/${meetingId}/moments`,
-    momentsSchema,
+  const base = `uploads/${meetingId}/moments`;
+  const stored = useApiData(`/api/${base}`, momentsSchema);
+  // Local edits layered over the loaded list; null marks a deleted moment.
+  const [changes, setChanges] = useState<Map<string, PersistedMoment | null>>(
+    () => new Map(),
   );
-  const [saved, setSaved] = useState<PersistedMoment[]>([]);
-  const moments = [
-    ...new Map(
-      [...(stored.data ?? []), ...saved].map((m) => [m.id, m]),
-    ).values(),
-  ];
-  const [saveNotice, setSaveNotice] = useState('');
-  const [copyState, setCopyState] = useState<{
-    id: string;
-    message: string;
-  } | null>(null);
+  const loaded = new Map((stored.data ?? []).map((m) => [m.id, m]));
+  for (const [id, moment] of changes)
+    if (moment) loaded.set(id, moment);
+    else loaded.delete(id);
+  const moments = [...loaded.values()].sort((a, b) => a.startMs - b.startMs);
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     if (!draft) return;
@@ -65,24 +64,58 @@ export function MeetingMoments({
     );
   }, [draft]);
 
+  function remember(id: string, moment: PersistedMoment | null) {
+    setChanges((current) => new Map(current).set(id, moment));
+  }
+
   async function saveMoment(moment: MeetingMoment) {
-    await uploadApi('session', 'POST');
     const result = persistedMomentSchema.parse(
-      await uploadApi(`meetings/${meetingId}/moments`, 'POST', moment),
+      await uploadApi(base, 'POST', moment),
     );
-    setSaved((current) => [...current, result]);
-    setSaveNotice('Moment saved to this meeting.');
+    remember(result.id, result);
+    setNotice('Moment saved. It stays private until you share it.');
     onCloseDraft();
   }
 
-  async function copyLink(moment: PersistedMoment) {
-    if (!moment.sharePath) return;
-    const url = new URL(moment.sharePath, window.location.origin);
+  async function run(id: string, action: () => Promise<void>) {
+    setBusy(id);
+    setNotice('');
+    try {
+      await action();
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : 'That didn’t work. Retry.',
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const share = (moment: PersistedMoment, method: 'POST' | 'DELETE') =>
+    run(moment.id, async () => {
+      const result = persistedMomentSchema.parse(
+        await uploadApi(`${base}/${moment.id}/share`, method),
+      );
+      remember(result.id, result);
+      if (method === 'POST' && result.sharePath) {
+        await copyLink(result.sharePath);
+      } else setNotice('Public link revoked. It no longer opens this moment.');
+    });
+
+  const remove = (moment: PersistedMoment) =>
+    run(moment.id, async () => {
+      await uploadApi(`${base}/${moment.id}`, 'DELETE');
+      remember(moment.id, null);
+      setNotice('Moment deleted.');
+    });
+
+  async function copyLink(sharePath: string) {
+    const url = new URL(sharePath, window.location.origin);
     try {
       await navigator.clipboard.writeText(url.toString());
-      setCopyState({ id: moment.id, message: 'Link copied' });
+      setNotice('Public link copied. Anyone with it can view this moment.');
     } catch {
-      setCopyState({ id: moment.id, message: 'Copy failed — try again' });
+      setNotice(`Public link: ${url}`);
     }
   }
 
@@ -96,11 +129,7 @@ export function MeetingMoments({
           <h2>
             Moments <span>{moments.length}</span>
           </h2>
-          <p>
-            {privateMeeting
-              ? 'Saved privately with this recording.'
-              : 'Save the part worth returning to or sharing.'}
-          </p>
+          <p>Save the part worth returning to or sharing.</p>
         </div>
       </div>
 
@@ -112,7 +141,6 @@ export function MeetingMoments({
           draft={draft}
           onCancel={onCloseDraft}
           onSave={saveMoment}
-          privateMeeting={privateMeeting}
         />
       )}
 
@@ -132,62 +160,80 @@ export function MeetingMoments({
             <p>Use a transcript row or the player to save the first moment.</p>
           </div>
         ) : (
-          moments.map((moment) => {
-            const sharePath = moment.sharePath;
-            return (
-              <article className="moment-item" key={moment.id}>
-                <button
-                  className="moment-play"
-                  aria-label={`Play ${moment.title} at ${formatTime(moment.startMs / 1000)}`}
-                  disabled={seekDisabled}
-                  onClick={() => onSeek(moment.startMs / 1000)}
-                >
-                  <Play size={14} />
-                </button>
-                <div className="moment-copy">
-                  <h3>{moment.title}</h3>
-                  {moment.note && <p>{moment.note}</p>}
-                  <span>
-                    {formatTime(moment.startMs / 1000)}–
-                    {formatTime(Math.ceil(moment.endMs / 1000))} ·{' '}
-                    {privateMeeting
-                      ? 'Private moment'
-                      : 'Public link includes this range'}
-                  </span>
-                </div>
-                {!privateMeeting && sharePath && (
-                  <div className="moment-actions">
+          moments.map((moment) => (
+            <article className="moment-item" key={moment.id}>
+              <button
+                className="moment-play"
+                aria-label={`Play ${moment.title} at ${formatTime(moment.startMs / 1000)}`}
+                disabled={seekDisabled}
+                onClick={() => onSeek(moment.startMs / 1000)}
+              >
+                <Play size={14} />
+              </button>
+              <div className="moment-copy">
+                <h3>{moment.title}</h3>
+                {moment.note && <p>{moment.note}</p>}
+                <span>
+                  {formatTime(moment.startMs / 1000)}–
+                  {formatTime(Math.ceil(moment.endMs / 1000))} ·{' '}
+                  {moment.sharePath ? 'Shared by link' : 'Private'}
+                </span>
+              </div>
+              <div className="moment-actions">
+                {moment.sharePath ? (
+                  <>
                     <button
                       className="moment-action"
-                      onClick={() => void copyLink(moment)}
+                      disabled={busy === moment.id}
+                      onClick={() => void copyLink(moment.sharePath!)}
                       aria-label={`Copy public link for ${moment.title}`}
                     >
                       <Copy size={14} /> Copy link
                     </button>
                     <a
                       className="moment-action"
-                      href={sharePath}
+                      href={moment.sharePath}
                       target="_blank"
                       rel="noreferrer"
                       aria-label={`Open public view for ${moment.title}`}
                     >
-                      <ExternalLink size={14} /> Open public view
+                      <ExternalLink size={14} /> Open
                     </a>
-                    {copyState?.id === moment.id && (
-                      <span className="moment-copy-status" role="status">
-                        {copyState.message}
-                      </span>
-                    )}
-                  </div>
+                    <button
+                      className="moment-action"
+                      disabled={busy === moment.id}
+                      onClick={() => void share(moment, 'DELETE')}
+                      aria-label={`Revoke public link for ${moment.title}`}
+                    >
+                      <Link2Off size={14} /> Revoke
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="moment-action"
+                    disabled={busy === moment.id}
+                    onClick={() => void share(moment, 'POST')}
+                    aria-label={`Create public link for ${moment.title}`}
+                  >
+                    <Link2 size={14} /> Share
+                  </button>
                 )}
-              </article>
-            );
-          })
+                <button
+                  className="moment-action"
+                  disabled={busy === moment.id}
+                  onClick={() => void remove(moment)}
+                  aria-label={`Delete ${moment.title}`}
+                >
+                  <Trash2 size={14} /> Delete
+                </button>
+              </div>
+            </article>
+          ))
         )}
       </div>
-      {saveNotice && (
+      {notice && (
         <p className="moment-save-notice" role="status">
-          {saveNotice}
+          {notice}
         </p>
       )}
     </section>
@@ -200,14 +246,12 @@ function MomentComposer({
   draft,
   onCancel,
   onSave,
-  privateMeeting,
 }: {
   meetingId: string;
   duration: number;
   draft: MomentDraft;
   onCancel: () => void;
   onSave: (moment: MeetingMoment) => Promise<void>;
-  privateMeeting: boolean;
 }) {
   const [title, setTitle] = useState(`Moment at ${formatTime(draft.start)}`);
   const [note, setNote] = useState('');
@@ -328,9 +372,8 @@ function MomentComposer({
         </p>
       )}
       <p className="moment-share-hint">
-        {privateMeeting
-          ? 'This moment is saved privately. Use Share meeting above to publish the full recording.'
-          : 'Anyone with the public link can view this title, note, range, and its transcript context.'}
+        Moments are private. If you share one later, anyone with its link can
+        view this title, note, and the recording around it.
       </p>
       <div className="moment-form-actions">
         <button type="button" className="secondary-button" onClick={onCancel}>

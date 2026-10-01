@@ -11,7 +11,6 @@ export default tseslint.config(
       'playwright-report/**',
       'test-results/**',
       '.wrangler/**',
-      'lumora-ai-copy-site/**',
     ],
   },
   js.configs.recommended,

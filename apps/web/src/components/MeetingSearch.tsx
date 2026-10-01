@@ -97,9 +97,7 @@ export function MeetingSearchResults({
         {results.map((result) => (
           <article className="search-result-card" key={result.meeting.id}>
             <header>
-              <span
-                className={`meeting-icon ${result.meeting.category.toLowerCase()}`}
-              >
+              <span className="meeting-icon">
                 <AudioLines size={20} />
               </span>
               <div>
@@ -107,18 +105,15 @@ export function MeetingSearchResults({
                   {result.meeting.title}
                 </Link>
                 <span>
-                  {result.meeting.provenance === 'uploaded'
-                    ? 'Private recording'
-                    : result.meeting.provenance === 'reference-recording'
-                      ? 'Real recording · Imported transcript'
-                      : `${result.meeting.category} · Synthetic demo`}
+                  {formatTime(result.meeting.duration)} ·{' '}
+                  {result.meeting.participants.join(', ')}
                 </span>
               </div>
               <span className="search-result-date">
-                {new Intl.DateTimeFormat('en', {
+                {new Intl.DateTimeFormat(undefined, {
                   month: 'short',
                   day: 'numeric',
-                  timeZone: 'UTC',
+                  year: 'numeric',
                 }).format(new Date(result.meeting.date))}
               </span>
             </header>

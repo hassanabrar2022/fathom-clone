@@ -1,0 +1,88 @@
+.settings-layout {
+  display: grid;
+  gap: var(--space-5);
+  max-width: 640px;
+}
+.settings-card {
+  display: grid;
+  gap: 14px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.settings-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--accent);
+}
+.settings-card-heading h2 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-primary, inherit);
+}
+.settings-card > p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-13);
+  line-height: 1.55;
+}
+.settings-card > .settings-value {
+  color: inherit;
+  font-size: 15px;
+  font-weight: 600;
+}
+.settings-field {
+  display: grid;
+  gap: 6px;
+  font-size: var(--text-13);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.settings-field input {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 6px);
+  background: var(--surface-subtle);
+  color: inherit;
+  font: inherit;
+  font-weight: 400;
+}
+.settings-field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.settings-card > .primary-button,
+.settings-card > .delete-confirm-button {
+  justify-self: start;
+}
+.settings-success {
+  color: var(--success, #2f7a4f);
+  font-size: var(--text-13);
+  margin: 0;
+}
+.settings-danger {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+}
+.settings-danger .settings-card-heading {
+  color: var(--danger);
+}
+.delete-meeting-dialog form {
+  display: grid;
+  gap: 12px;
+}
+.settings-card .delete-confirm-button,
+.delete-meeting-dialog .delete-confirm-button {
+  padding: 0 14px;
+  min-height: 38px;
+  border: 0;
+  background: var(--danger);
+  color: var(--danger-foreground);
+  cursor: pointer;
+}
+.settings-card .delete-confirm-button:hover:not(:disabled),
+.delete-meeting-dialog .delete-confirm-button:hover:not(:disabled) {
+  background: var(--danger-hover);
+}

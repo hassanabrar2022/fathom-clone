@@ -93,7 +93,7 @@ export function searchMeeting(
   if (includesQuery(meeting.title, normalized)) {
     matches.push({ id: 'title', kind: 'title', text: meeting.title });
   }
-  if (includesQuery(meeting.summary, normalized)) {
+  if (meeting.summary && includesQuery(meeting.summary, normalized)) {
     matches.push({ id: 'summary', kind: 'summary', text: meeting.summary });
   }
   meeting.participants.forEach((participant, index) => {
@@ -123,13 +123,11 @@ export function searchMeetingLibrary(
   meetings: Meeting[],
   documents: MeetingSearchDocument[],
   query: string,
-  category: string,
 ): MeetingSearchResult[] {
   const documentsByMeeting = new Map(
     documents.map((document) => [document.meetingId, document]),
   );
   return meetings.flatMap((meeting) => {
-    if (category !== 'All meetings' && category !== meeting.category) return [];
     const matches = searchMeeting(
       meeting,
       documentsByMeeting.get(meeting.id),

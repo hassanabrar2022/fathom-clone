@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { intelligenceSchema, segmentSchema } from './recording';
 
-// Conservative demo limits; enforced again before transcription on the server.
+// Upload limits; enforced again by the database and before transcription.
 export const uploadLimits = { bytes: 25 * 1024 * 1024, seconds: 10 * 60 };
 export const uploadMimeTypes = [
   'video/mp4',

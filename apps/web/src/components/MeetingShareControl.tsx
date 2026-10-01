@@ -11,13 +11,7 @@ import { meetingShareStatusSchema } from '../../../../packages/shared/sharing';
 import { uploadApi } from '../data/uploads';
 import './meeting-share.css';
 
-export function MeetingShareControl({
-  meetingId,
-  privateMeeting = false,
-}: {
-  meetingId: string;
-  privateMeeting?: boolean;
-}) {
+export function MeetingShareControl({ meetingId }: { meetingId: string }) {
   const [expanded, setExpanded] = useState(false);
   const [path, setPath] = useState<string | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
@@ -30,7 +24,7 @@ export function MeetingShareControl({
 
   useEffect(() => {
     let disposed = false;
-    uploadApi(`${privateMeeting ? 'uploads' : 'meetings'}/${meetingId}/share`)
+    uploadApi(`uploads/${meetingId}/share`)
       .then((data) => {
         if (disposed) return;
         setPath(meetingShareStatusSchema.parse(data).path);
@@ -42,7 +36,7 @@ export function MeetingShareControl({
     return () => {
       disposed = true;
     };
-  }, [meetingId, privateMeeting, attempt]);
+  }, [meetingId, attempt]);
 
   async function changeShare(method: 'POST' | 'DELETE') {
     setBusy(true);
@@ -91,9 +85,8 @@ export function MeetingShareControl({
         <div>
           <strong>Share the full meeting</strong>
           <p>
-            {privateMeeting
-              ? 'Choose when to give someone access to this recording, transcript, and summaries.'
-              : 'Send a read-only view of this public demo recording and its notes.'}
+            Choose when to give someone access to this recording, transcript,
+            and summaries.
           </p>
         </div>
         <button
@@ -128,9 +121,8 @@ export function MeetingShareControl({
           ) : path ? (
             <>
               <p>
-                {privateMeeting
-                  ? 'Anyone with this link can view the entire meeting. Revoke it at any time.'
-                  : 'This recording is already public in the demo workspace.'}
+                Anyone with this link can view the entire meeting. Revoke it at
+                any time.
               </p>
               <div className="meeting-share-link-row">
                 <input
@@ -147,19 +139,17 @@ export function MeetingShareControl({
                   <ExternalLink size={14} /> Open public view
                 </a>
               </div>
-              {privateMeeting && (
-                <button
-                  type="button"
-                  className="meeting-share-revoke"
-                  disabled={busy}
-                  onClick={() => void changeShare('DELETE')}
-                >
-                  {busy ? (
-                    <LoaderCircle size={13} className="loading-icon" />
-                  ) : null}
-                  Revoke public link
-                </button>
-              )}
+              <button
+                type="button"
+                className="meeting-share-revoke"
+                disabled={busy}
+                onClick={() => void changeShare('DELETE')}
+              >
+                {busy ? (
+                  <LoaderCircle size={13} className="loading-icon" />
+                ) : null}
+                Revoke public link
+              </button>
             </>
           ) : (
             <div className="meeting-share-create">
