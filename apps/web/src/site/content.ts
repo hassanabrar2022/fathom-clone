@@ -130,12 +130,12 @@ export const solutions: Solution[] = [
 ];
 
 export const roleCards = [
-  { title: 'Sales', body: 'Capture needs, objections, and follow-ups from every call.', link: '/solutions/sales', icon: 'rocket' },
-  { title: 'Customer Success', body: 'Keep every account’s context searchable for the whole team.', link: '/solutions/customer-success', icon: 'compass' },
-  { title: 'Marketing', body: 'Pull the exact customer words your messaging needs.', link: '/solutions/marketing', icon: 'satellite' },
-  { title: 'Operations', body: 'Turn decisions into owned, timestamped action items.', link: '/solutions/teams', icon: 'users' },
-  { title: 'HR & Talent', body: 'Use the Recruiting / Interview view to compare candidates fairly.', link: '/solutions/teams', icon: 'compass' },
-  { title: 'Product & Engineering', body: 'Search research calls and share the moment a user hit friction.', link: '/solutions/marketing', icon: 'satellite' },
+  { title: 'Sales', short: 'sales', kicker: 'Stay on top of every deal', body: 'Capture needs, objections, and follow-ups from every call, with each point linked to where the buyer said it.', link: '/solutions/sales', icon: 'rocket' },
+  { title: 'Customer Success', short: 'CS', kicker: 'Stronger relationships', body: 'Keep every account’s context searchable, so the next person on the account starts with the full story.', link: '/solutions/customer-success', icon: 'compass' },
+  { title: 'Marketing', short: 'marketing', kicker: 'Less guessing', body: 'Pull the exact words customers use from interviews and calls, and share the moment that proves it.', link: '/solutions/marketing', icon: 'satellite' },
+  { title: 'Operations', short: 'teams', kicker: 'Clear ownership', body: 'Turn decisions into owned, timestamped action items that nobody has to re-type.', link: '/solutions/teams', icon: 'users' },
+  { title: 'HR & Talent', short: 'teams', kicker: 'Fairer reviews', body: 'Use the Recruiting / Interview view to compare candidates on the evidence from each conversation.', link: '/solutions/teams', icon: 'compass' },
+  { title: 'Product & Engineering', short: 'marketing', kicker: 'Closer to users', body: 'Search research calls and share the exact moment a user hit friction with the team.', link: '/solutions/marketing', icon: 'satellite' },
 ] as const;
 
 export const featureSlides = [

@@ -1,21 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
   AudioLines,
-  Compass,
   FileAudio,
   Lock,
   Rocket,
-  Satellite,
+  ScanSearch,
   Search,
   Sparkles,
   Target,
-  Users,
   Zap,
 } from 'lucide-react';
-import { SiteLayout, Starfield, useReveal } from './SiteLayout';
+import { SiteLayout, Starfield } from './SiteLayout';
 import {
   MockActions,
   MockCall,
@@ -23,9 +21,40 @@ import {
   MockSummary,
   MockTranscript,
 } from './Mockups';
+import { Ship, SwirlPlanet, roleArt } from './Art';
 import { featureSlides, roleCards } from './content';
+import './home.css';
 
-const icons = { rocket: Rocket, compass: Compass, satellite: Satellite, users: Users };
+/** 0 when the element's top reaches the viewport top, 1 when its end does. */
+function useScrollProgress<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const element = ref.current;
+      if (!element) return;
+      const box = element.getBoundingClientRect();
+      const travel = box.height - window.innerHeight;
+      setProgress(
+        travel > 0 ? Math.min(1, Math.max(0, -box.top / travel)) : box.top < 0 ? 1 : 0,
+      );
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+    };
+  }, []);
+  return [ref, progress] as const;
+}
 
 function Typewriter({ text }: { text: string }) {
   const [still] = useState(
@@ -59,21 +88,21 @@ function Hero() {
   return (
     <section className="home-hero site-dark">
       <Starfield />
-      <div className="site-container home-hero-grid">
+      <div className="site-container">
         <div className="home-hero-copy">
           <h1>
-            <Typewriter text="AI notetaking that keeps you in the moment" />
+            <Typewriter text="AI notetaking for every recording" />
           </h1>
           <p>
             Fathom Clone summarizes your meetings so you can focus on the
-            conversation. <strong>Just upload the recording.</strong>
+            conversation. <strong>Now from any recording.</strong>
           </p>
-          <Link to="/signup" className="site-pill site-pill-cyan site-pill-lg">
-            Get started – free forever
+          <Link to="/signup" className="site-pill site-pill-cyan">
+            Get started - free forever
           </Link>
           <div className="home-trust">
-            <Lock size={12} /> Private by default <i>|</i> Revocable share
-            links <i>|</i> Delete anytime
+            <Lock size={12} /> Private by default <i>|</i> Revocable links{' '}
+            <i>|</i> No bot <i>|</i> Delete anytime
           </div>
         </div>
         <div className="home-collage" aria-hidden="true">
@@ -81,10 +110,10 @@ function Hero() {
             <div className="capsule-menu-card">
               <span>Recording</span>
               <b>
-                <FileAudio size={11} /> Video &amp; audio
+                <FileAudio size={11} /> Audio &amp; video
               </b>
               <b className="is-on">
-                <AudioLines size={11} /> Audio only
+                <AudioLines size={11} /> Audio
               </b>
               <b>
                 <Sparkles size={11} /> Transcript + notes
@@ -96,7 +125,7 @@ function Hero() {
           </div>
           <div className="capsule capsule-wave">
             <div className="wave-bars">
-              {Array.from({ length: 28 }, (_, index) => (
+              {Array.from({ length: 30 }, (_, index) => (
                 <span key={index} style={{ animationDelay: `${index * 70}ms` }} />
               ))}
             </div>
@@ -130,20 +159,24 @@ function Hero() {
             <span className="planet" />
           </div>
         </div>
-      </div>
-      <div className="site-container home-proof">
-        <div className="home-proof-label">
-          Upload recordings
-          <br />
-          from any platform
-        </div>
-        {['Zoom', 'Google Meet', 'Microsoft Teams', 'Loom', 'Voice memos', 'Webex'].map(
-          (name) => (
-            <span key={name} className="home-proof-chip">
-              {name}
+        <div className="home-proof">
+          <div className="home-proof-badge">
+            <b>✦</b>
+            <span>
+              Free forever
+              <br />
+              for individuals
             </span>
-          ),
-        )}
+          </div>
+          <div className="home-proof-label">Upload from any platform</div>
+          {['Zoom', 'Google Meet', 'Teams', 'Loom', 'Webex', 'Voice'].map(
+            (name) => (
+              <span key={name} className="home-proof-chip">
+                {name}
+              </span>
+            ),
+          )}
+        </div>
       </div>
     </section>
   );
@@ -155,33 +188,54 @@ const slideVisuals = {
   actions: <MockActions />,
   moments: <MockMoments />,
 };
+const slideCaptions = {
+  summary: (
+    <>
+      Capture notes your way – <strong>any recording</strong> –
+      <br />
+      so you can stay focused on the meeting
+    </>
+  ),
+  transcript: (
+    <>
+      A transcript that follows along,
+      <br />
+      line by line
+    </>
+  ),
+  actions: (
+    <>
+      Action items with owners,
+      <br />
+      linked to the moment
+    </>
+  ),
+  moments: (
+    <>
+      Share the moment that matters
+      <br />
+      with one link
+    </>
+  ),
+};
 
 function CaptureCarousel() {
   const [active, setActive] = useState(0);
   const total = featureSlides.length;
   useEffect(() => {
-    const timer = window.setInterval(
+    const timer = window.setTimeout(
       () => setActive((value) => (value + 1) % total),
       6000,
     );
-    return () => window.clearInterval(timer);
+    return () => window.clearTimeout(timer);
   }, [active, total]);
   return (
-    <section className="home-capture">
-      <div className="home-capture-intro site-container">
-        <p>
-          Capture notes your way – <strong>any recording</strong> – so you can
-          stay focused on the meeting
-        </p>
-        <p className="is-faint">
-          {featureSlides[active].title}.{' '}
-          <span>{featureSlides[active].body}</span>
-        </p>
-      </div>
+    <section className="home-capture site-dark" aria-label="Product tour">
+      <Starfield />
       <div className="home-capture-track">
         <div
           className="home-capture-slides"
-          style={{ transform: `translateX(calc(${-active} * (min(860px, 78vw) + 32px)))` }}
+          style={{ transform: `translateX(${-active * 552}px)` }}
         >
           {featureSlides.map((slide, index) => (
             <div
@@ -189,8 +243,11 @@ function CaptureCarousel() {
               className={`home-capture-slide ${index === active ? 'is-active' : ''}`}
               aria-hidden={index !== active}
             >
-              <MockCall />
-              {slideVisuals[slide.key]}
+              <p>{slideCaptions[slide.key]}</p>
+              <div className="capture-visual">
+                <MockCall />
+                {slideVisuals[slide.key]}
+              </div>
             </div>
           ))}
         </div>
@@ -198,10 +255,10 @@ function CaptureCarousel() {
       <div className="home-capture-controls">
         <button
           type="button"
-          aria-label="Previous feature"
+          aria-label="Previous slide"
           onClick={() => setActive((active - 1 + total) % total)}
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft size={18} />
         </button>
         {featureSlides.map((slide, index) => (
           <button
@@ -214,10 +271,10 @@ function CaptureCarousel() {
         ))}
         <button
           type="button"
-          aria-label="Next feature"
+          aria-label="Next slide"
           onClick={() => setActive((active + 1) % total)}
         >
-          <ArrowRight size={16} />
+          <ArrowRight size={18} />
         </button>
       </div>
     </section>
@@ -228,13 +285,12 @@ function Marquee() {
   const item = (
     <span className="marquee-item">
       Move <em>work</em> forward faster
-      <span className="marquee-ship" aria-hidden="true">
-        <Rocket size={46} />
-      </span>
+      <Ship className="marquee-ship" />
     </span>
   );
   return (
     <section className="home-marquee site-dark" aria-label="Move work forward faster">
+      <Starfield />
       <div className="marquee-track" aria-hidden="true">
         {item}
         {item}
@@ -258,14 +314,14 @@ function TeamsCard() {
             </>
           ),
           body: [
-            'Fathom Clone gives teams a shared source of truth across every customer conversation, internal sync, and strategy call – so decisions are visible, follow-through is consistent, and nothing gets lost.',
+            'Fathom Clone gives teams a shared source of truth across every customer conversation, internal sync, and strategy call – so decisions are visible, follow-through is consistent, and nothing gets lost between meetings.',
             'Search conversations, share the moments that matter, and keep work moving without the manual notes.',
           ],
           items: [
             [Zap, 'Automatic transcripts, summaries, and action items reduce follow-up admin.'],
             [Rocket, 'Turn conversations into clear next steps with owners and timing.'],
-            [FileAudio, 'Keep decisions and commitments searchable across every meeting.'],
-            [Sparkles, 'Share a full meeting or a single moment with a revocable link.'],
+            [ScanSearch, 'Keep decisions and commitments searchable across every meeting.'],
+            [Sparkles, 'Share a full meeting or a single moment with a link you can revoke.'],
           ],
         }
       : {
@@ -283,52 +339,56 @@ function TeamsCard() {
           items: [
             [Zap, 'Accurate transcripts with timestamps you can click.'],
             [Target, 'Summaries in three perspectives for the same call.'],
-            [Search, 'Search every meeting you have ever uploaded.'],
+            [Search, 'Search every meeting you have uploaded.'],
             [Lock, 'Private to your account until you choose to share.'],
           ],
         };
   return (
     <section className="home-teams site-dark">
       <Starfield />
+      <SwirlPlanet className="home-teams-planet" />
       <div className="site-container">
         <h2 className="site-h2 home-teams-title">
-          Whether you’re a team of 1 or 1,000, Fathom Clone’s got your back
+          Whether you’re a team of 1 or 1,000, we’ve got your back
         </h2>
-        <div className="home-teams-card">
-          <div className="home-teams-tabs" role="tablist">
-            <button
-              role="tab"
-              aria-selected={tab === 'teams'}
-              onClick={() => setTab('teams')}
-            >
-              Fathom Clone for teams
-            </button>
-            <button
-              role="tab"
-              aria-selected={tab === 'individuals'}
-              onClick={() => setTab('individuals')}
-            >
-              Fathom Clone for individuals
-            </button>
+      </div>
+      <div className="home-teams-card">
+        <div className="home-teams-tabs" role="tablist">
+          <button
+            role="tab"
+            aria-selected={tab === 'teams'}
+            onClick={() => setTab('teams')}
+          >
+            Fathom Clone for teams
+          </button>
+          <button
+            role="tab"
+            aria-selected={tab === 'individuals'}
+            onClick={() => setTab('individuals')}
+          >
+            Fathom Clone for individuals
+          </button>
+        </div>
+        <div className="home-teams-body">
+          <div>
+            <h3>{content.title}</h3>
+            {content.body.map((text) => (
+              <p key={text}>{text}</p>
+            ))}
+            <Link to="/pricing" className="site-pill site-pill-cyan">
+              See our pricing
+            </Link>
           </div>
-          <div className="home-teams-body">
-            <div>
-              <h3>{content.title}</h3>
-              {content.body.map((text) => (
-                <p key={text}>{text}</p>
-              ))}
-              <Link to="/pricing" className="site-pill site-pill-cyan site-pill-sm">
-                See our pricing
-              </Link>
-            </div>
-            <div className="home-teams-items">
-              {content.items.map(([Icon, text]) => (
+          <div className="home-teams-items">
+            {content.items.map(([Icon, text]) => {
+              const I = Icon as typeof Zap;
+              return (
                 <div key={text as string}>
-                  <Icon size={20} />
+                  <I strokeWidth={1.6} />
                   <p>{text as string}</p>
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -340,64 +400,60 @@ const pillars = [
   {
     title: 'Clarity',
     kicker: 'Unforgettable meetings, without the notes',
-    body: 'Accurate transcripts, instant summaries, and action items with consistent quality across every call.',
+    tone: '',
+    pill: 'site-pill-cyan',
+    body: 'Accurate transcripts, instant summaries, and action items with consistent quality across every call – ready the moment processing finishes.',
     visual: <MockSummary />,
   },
   {
     title: 'Momentum',
     kicker: 'From conversation to next step',
-    body: 'Every commitment is captured with its owner and timing, and links back to the moment it was made.',
+    tone: 'is-yellow',
+    pill: 'site-pill-yellow',
+    body: 'Every commitment is captured with its owner and timing, and links back to the moment it was made – so follow-through never depends on memory.',
     visual: <MockActions />,
   },
   {
     title: 'Ease',
-    kicker: 'Nothing to install, nothing to invite',
-    body: 'Upload a recording from any platform. No bot joins your call, and nothing changes for the people you meet with.',
+    kicker: 'Works wherever you record',
+    tone: 'is-pink',
+    pill: 'site-pill-pink',
+    body: 'Upload a recording from any platform. No bot joins your call, nothing to install, and nothing changes for the people you meet with.',
     visual: <MockTranscript />,
   },
 ];
 
 function Pillars() {
-  const [active, setActive] = useState(0);
-  const refs = useRef<(HTMLDivElement | null)[]>([]);
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries)
-          if (entry.isIntersecting)
-            setActive(Number((entry.target as HTMLElement).dataset.index));
-      },
-      { rootMargin: '-45% 0px -45% 0px' },
-    );
-    refs.current.forEach((element) => element && observer.observe(element));
-    return () => observer.disconnect();
-  }, []);
+  const [ref, progress] = useScrollProgress<HTMLElement>();
+  const active = Math.min(pillars.length - 1, Math.floor(progress * pillars.length));
   return (
-    <section className="home-pillars site-dark">
+    <section className="home-pillars site-dark" ref={ref}>
       <Starfield />
-      <div className="site-container home-pillars-grid">
+      <div className="home-pillars-stage site-container">
         <div className="home-pillars-copy">
           {pillars.map((pillar, index) => (
             <div
               key={pillar.title}
-              ref={(element) => {
-                refs.current[index] = element;
-              }}
-              data-index={index}
               className={`home-pillar ${index === active ? 'is-active' : ''}`}
             >
               <h3>{pillar.title}</h3>
-              <span className="site-kicker">✦ {pillar.kicker}</span>
-              <p>{pillar.body}</p>
-              <Link to="/signup" className="site-pill site-pill-cyan site-pill-sm">
-                Get started. It’s free.
-              </Link>
+              <div className="home-pillar-body">
+                <div>
+                  <span className={`site-kicker ${pillar.tone}`}>✦ {pillar.kicker}</span>
+                  <p>{pillar.body}</p>
+                  <Link to="/signup" className={`site-pill ${pillar.pill}`}>
+                    Get Started. It’s Free.
+                  </Link>
+                </div>
+              </div>
             </div>
           ))}
         </div>
-        <div className="home-pillars-visual">
+        <div className="home-pillars-visual" aria-hidden="true">
           <div className="home-pillars-backdrop" />
-          <div className="home-pillars-circle">
+          <div
+            className={`home-pillars-circle is-${pillars[active].title.toLowerCase()}`}
+          >
             <span className="ring ring-1" />
             <span className="ring ring-2" />
             <span className="ring ring-3" />
@@ -411,47 +467,103 @@ function Pillars() {
   );
 }
 
+const stats = [
+  ['3 views', 'of every meeting: General, Sales, and Recruiting', 'tone-orange', 0, 0],
+  ['1 click', 'from any summary point back to where it was said', 'tone-pink', 0.08, 118],
+  ['60 sec', 'moments you can share with a link you control', 'tone-blue', 0.16, 222],
+] as const;
+
 function Stats() {
-  const [ref, visible] = useReveal<HTMLDivElement>();
-  const stats = [
-    ['3 views', 'of every meeting: General, Sales, and Recruiting', 'tone-orange'],
-    ['1 click', 'from any summary point back to the moment it was said', 'tone-pink'],
-    ['60 sec', 'moments you can share with a revocable link', 'tone-blue'],
-  ];
+  const [ref, progress] = useScrollProgress<HTMLElement>();
   return (
-    <section className="home-stats">
-      <div className="site-container">
+    <section className="home-stats" ref={ref}>
+      <div className="home-stats-stage">
         <h2 className="site-h2 is-dark">
           Fathom Clone teams
           <br />
           work smarter
         </h2>
-        <div ref={ref} className={`home-stats-row ${visible ? 'is-visible' : ''}`}>
-          {stats.map(([value, label, tone], index) => (
-            <div
-              key={value}
-              className="home-stat"
-              style={{ transitionDelay: `${index * 180}ms` }}
-            >
-              <div className={`home-stat-bubble ${tone}`}>
-                <strong>{value}</strong>
-                <span>{label}</span>
+        <div className="home-stats-row">
+          {stats.map(([value, label, tone, start, lift], index) => {
+            const rise = Math.min(1, Math.max(0, (progress - start) / 0.25));
+            return (
+              <div
+                key={value}
+                className="home-stat"
+                style={
+                  {
+                    '--rise': rise,
+                    '--lift': `${lift}px`,
+                    '--beam': `${260 + index * 110}px`,
+                  } as React.CSSProperties
+                }
+              >
+                <div className={`home-stat-bubble ${tone}`}>
+                  <strong>{value}</strong>
+                  <span>{label}</span>
+                </div>
+                <div className={`home-stat-beam ${tone}`} />
               </div>
-              <div className={`home-stat-beam ${tone}`} />
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>
   );
 }
 
-function RevealLine({ children }: { children: React.ReactNode }) {
-  const [ref, visible] = useReveal<HTMLParagraphElement>();
+type Phrase = string | { accent: string; text: string };
+const statements: Phrase[][] = [
+  [
+    'Accurate meeting notes, call summaries, and action items mean your team stays perfectly aligned without the extra overhead – ',
+    { accent: 'grad-orange', text: 'even if they couldn’t attend live.' },
+  ],
+  [
+    'Every summary point and action item links back to the exact moment it was said, ',
+    { accent: 'grad-violet', text: 'so nobody has to take anyone’s word for it.' },
+  ],
+  [
+    'Saved moments and shared meetings put the right context in front of the right people, ',
+    { accent: 'grad-cyan', text: 'without another meeting about the meeting.' },
+  ],
+];
+
+function words(phrases: Phrase[]) {
+  return phrases.flatMap((phrase) => {
+    const text = typeof phrase === 'string' ? phrase : phrase.text;
+    const accent = typeof phrase === 'string' ? null : phrase.accent;
+    return text.split(/(\s+)/).filter(Boolean).map((word) => ({ word, accent }));
+  });
+}
+
+function Statements() {
+  const [ref, progress] = useScrollProgress<HTMLDivElement>();
+  const scaled = progress * statements.length;
+  const index = Math.min(statements.length - 1, Math.floor(scaled));
+  const list = words(statements[index]);
+  const lit = Math.ceil(Math.min(1, (scaled - index) * 1.5) * list.length);
   return (
-    <p ref={ref} className={`home-statement ${visible ? 'is-visible' : ''}`}>
-      {children}
-    </p>
+    <div className="home-statements" ref={ref}>
+      <div className="home-statements-stage">
+        <p key={index} className="home-statement">
+          {list.map(({ word, accent }, position) =>
+            /^\s+$/.test(word) ? (
+              <Fragment key={position}>{word}</Fragment>
+            ) : (
+              <span
+                key={position}
+                className={`word ${position < lit ? 'is-lit' : ''}`}
+              >
+                {accent ? <em className={accent}>{word}</em> : word}
+              </span>
+            ),
+          )}
+        </p>
+        <Link to="/signup" className="site-pill site-pill-cyan">
+          Try Fathom Clone for your team
+        </Link>
+      </div>
+    </div>
   );
 }
 
@@ -460,18 +572,16 @@ function Unstoppable() {
     <section className="home-unstoppable site-dark">
       <Starfield />
       <div className="site-container">
-        <span className="site-kicker is-center">✦ Better meetings. Better results.</span>
-        <h2 className="site-h2">
-          Make your team
-          <br />
-          unstoppable
-        </h2>
+        <span className="site-kicker is-center">
+          ✦ Shared understanding. Faster execution. Better results.
+        </span>
+        <h2 className="site-h2">Make your team unstoppable</h2>
         <div className="home-app-shot" aria-hidden="true">
           <div className="home-app-shot-bar">
             <span />
             <span />
             <span />
-            <b>Quarterly planning · Oct 1</b>
+            <b>Quarterly planning</b>
           </div>
           <div className="home-app-shot-body">
             <MockSummary />
@@ -481,47 +591,72 @@ function Unstoppable() {
             </div>
           </div>
         </div>
-        <RevealLine>
-          Accurate meeting notes, call summaries, and{' '}
-          <em className="grad-cyan">action items mean your team stays aligned</em>{' '}
-          on every conversation.
-        </RevealLine>
-        <RevealLine>
-          Every summary point and action item{' '}
-          <em className="grad-violet">links back to the exact moment</em> it was
-          said, so nobody has to take anyone’s word for it.
-        </RevealLine>
-        <RevealLine>
-          Saved moments and shared meetings{' '}
-          <em className="grad-orange">put the right context in front of your team</em>,
-          without another meeting about the meeting.
-        </RevealLine>
-        <div className="site-center">
-          <Link to="/signup" className="site-pill site-pill-cyan site-pill-sm">
-            Try Fathom Clone for your team
-          </Link>
-        </div>
+        <Statements />
       </div>
     </section>
   );
 }
 
+// Positions measured on a 1328x480 stage; the core sits at (664, 240).
+const orbitChips = [
+  { name: 'Google Meet', x: 356, y: 80, side: 'left', color: '#34a853' },
+  { name: 'Zoom', x: 266, y: 240, side: 'left', color: '#2d8cff' },
+  { name: 'Voice memos', x: 326, y: 423, side: 'left', color: '#ff3b30' },
+  { name: 'Loom', x: 1052, y: 17, side: 'right', color: '#625df5' },
+  { name: 'Microsoft Teams', x: 1092, y: 222, side: 'right', color: '#5059c9' },
+  { name: 'Webex', x: 999, y: 433, side: 'right', color: '#00bceb' },
+] as const;
+const core = { x: 664, y: 240, r: 112 };
+
 function Orbit() {
-  const platforms = ['Zoom', 'Google Meet', 'Microsoft Teams', 'Loom', 'Webex', 'Voice memos'];
   return (
     <section className="home-orbit site-dark">
       <Starfield />
       <div className="site-container">
-        <span className="site-kicker is-center">✦ No bot. No install. No invite.</span>
-        <h2 className="site-h2">Works with any recording</h2>
+        <span className="site-kicker is-center is-yellow">
+          ✦ Zero friction, maximum flexibility.
+        </span>
+        <h2 className="site-h2 is-md">Works with any recording</h2>
         <div className="orbit" aria-hidden="true">
           <div className="orbit-grid" />
+          <svg className="orbit-lines" viewBox="0 0 1328 480">
+            <path
+              d="M454 -10 L874 240 L662 488 Z"
+              fill="none"
+              stroke="#f55200"
+              strokeOpacity="0.7"
+              strokeWidth="2"
+            />
+            {orbitChips.map((chip) => {
+              const dx = chip.x - core.x;
+              const dy = chip.y - core.y;
+              const length = Math.hypot(dx, dy);
+              const px = core.x + (dx / length) * core.r;
+              const py = core.y + (dy / length) * core.r;
+              const ex = chip.x + (chip.side === 'left' ? 70 : -60);
+              return (
+                <g key={chip.name}>
+                  <line x1={ex} y1={chip.y} x2={px} y2={py} stroke="#faf5f5" strokeWidth="1.5" />
+                  <circle cx={px} cy={py} r="4" fill="#faf5f5" />
+                  <circle cx={ex} cy={chip.y} r="3" fill="#faf5f5" />
+                </g>
+              );
+            })}
+          </svg>
           <div className="orbit-core">
-            <AudioLines size={34} />
+            <AudioLines size={84} strokeWidth={2.4} />
           </div>
-          {platforms.map((name, index) => (
-            <span key={name} className={`orbit-chip orbit-chip-${index}`}>
-              {name}
+          {orbitChips.map((chip) => (
+            <span
+              key={chip.name}
+              className="orbit-chip"
+              style={{
+                left: `${(chip.x / 1328) * 100}%`,
+                top: `${(chip.y / 480) * 100}%`,
+              }}
+            >
+              <i style={{ background: chip.color }} />
+              {chip.name}
             </span>
           ))}
         </div>
@@ -538,46 +673,42 @@ function Orbit() {
 function Roles() {
   const track = useRef<HTMLDivElement>(null);
   const scroll = (direction: number) =>
-    track.current?.scrollBy({ left: direction * 340, behavior: 'smooth' });
+    track.current?.scrollBy({ left: direction * 512, behavior: 'smooth' });
   return (
     <section className="home-roles site-dark">
       <Starfield />
       <div className="site-container">
-        <span className="site-kicker is-center">
-          ✦ Every team works better with accurate notes
+        <span className="site-kicker is-center is-yellow">
+          ✦ Empower your team’s best work with seriously accurate AI notetaking
         </span>
-        <h2 className="site-h2">Every team in flow</h2>
+        <h2 className="site-h2 is-md">Every team in flow</h2>
         <div className="site-center">
-          <Link to="/signup" className="site-pill site-pill-cyan site-pill-sm">
-            Get started. It’s free.
+          <Link to="/signup" className="site-pill site-pill-cyan">
+            Get Started. It’s Free.
           </Link>
         </div>
         <div className="home-roles-arrows">
           <button type="button" aria-label="Previous team" onClick={() => scroll(-1)}>
-            <ArrowLeft size={15} />
+            <ArrowLeft size={18} />
           </button>
           <button type="button" aria-label="Next team" onClick={() => scroll(1)}>
-            <ArrowRight size={15} />
+            <ArrowRight size={18} />
           </button>
         </div>
       </div>
       <div className="home-roles-track" ref={track}>
-        {roleCards.map((role) => {
-          const Icon = icons[role.icon];
-          return (
-            <article key={role.title} className="home-role">
-              <span className="home-role-spark">✦</span>
-              <h3>{role.title}</h3>
-              <p>{role.body}</p>
-              <div className="home-role-art">
-                <Icon size={92} strokeWidth={1} />
-              </div>
-              <Link to={role.link} className="site-pill site-pill-violet site-pill-sm">
-                See Fathom Clone for {role.title.split(' ')[0].toLowerCase()}
-              </Link>
-            </article>
-          );
-        })}
+        {roleCards.map((role) => (
+          <article key={role.title} className="home-role">
+            {roleArt[role.icon]}
+            <span className="home-role-spark">✦</span>
+            <h3>{role.title}</h3>
+            <span className="site-kicker is-pink">✦ {role.kicker}</span>
+            <p>{role.body}</p>
+            <Link to={role.link} className="site-pill site-pill-violet">
+              See Fathom Clone for {role.short}
+            </Link>
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -602,10 +733,10 @@ export function CtaBand({
         ))}
       </div>
       <div className="site-cta-content">
-        <span className="site-kicker is-dark">✦ Free forever for individuals</span>
-        <h2 className="site-h2">{title}</h2>
-        <Link to="/signup" className="site-pill site-pill-yellow site-pill-sm">
-          Get started. It’s free.
+        <span className="site-kicker is-dark">✦ Never take meeting notes again</span>
+        <h2 className="site-h2 is-md">{title}</h2>
+        <Link to="/signup" className="site-pill site-pill-yellow">
+          Get Started. It’s Free.
         </Link>
       </div>
     </section>

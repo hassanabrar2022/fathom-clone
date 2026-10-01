@@ -21,6 +21,8 @@ import { SiteLayout, Starfield } from './SiteLayout';
 import { CtaBand } from './Home';
 import { MockActions, MockCall, MockMoments, MockSummary, MockTranscript } from './Mockups';
 import { plans, planRows, solutions } from './content';
+import './home.css';
+import './pages.css';
 
 const icons = { rocket: Rocket, compass: Compass, satellite: Satellite, users: Users };
 

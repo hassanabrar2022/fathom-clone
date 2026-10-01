@@ -228,6 +228,7 @@
   bottom: -80px;
 }
 .auth-shell-foot {
+  border: 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;

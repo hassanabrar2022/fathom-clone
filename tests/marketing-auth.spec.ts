@@ -20,7 +20,7 @@ test('the public site reaches every page from its navigation', async ({
   await expect(
     page.getByRole('heading', {
       level: 1,
-      name: 'AI notetaking that keeps you in the moment',
+      name: 'AI notetaking for every recording',
     }),
   ).toBeAttached();
   const nav = page.getByRole('navigation', { name: 'Main' });
@@ -81,7 +81,7 @@ test('reduced motion shows the full headline immediately', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   await expect(page.locator('.home-hero h1 [aria-hidden="true"]')).toContainText(
-    'AI notetaking that keeps you in the moment',
+    'AI notetaking for every recording',
   );
 });
 

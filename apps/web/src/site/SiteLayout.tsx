@@ -4,13 +4,14 @@ import { AudioLines, ChevronDown, Menu, X } from 'lucide-react';
 import { useAuth } from '../auth-state';
 import { solutions } from './content';
 import '@fontsource-variable/sora';
-import './site.css';
+import '@fontsource/barlow-condensed/500.css';
+import './base.css';
 
 export function SiteBrand() {
   return (
     <Link to="/" className="site-brand" aria-label="Fathom Clone home">
       <span className="site-brand-mark" aria-hidden="true">
-        <AudioLines size={18} strokeWidth={2.5} />
+        <AudioLines size={16} strokeWidth={2.6} />
       </span>
       <span>FATHOM CLONE</span>
     </Link>
@@ -119,7 +120,7 @@ function SiteHeader() {
   }, []);
   return (
     <header className={`site-header ${scrolled ? 'is-scrolled' : ''}`}>
-      <div className="site-header-inner">
+      <div className="site-header-inner site-container">
         <SiteBrand />
         <nav className="site-nav" aria-label="Main">
           <NavLink to="/overview" className="site-nav-link">
@@ -183,48 +184,47 @@ function SiteFooter() {
   return (
     <footer className="site-footer">
       <div className="site-container">
+        <SiteBrand />
         <div className="site-footer-grid">
-          <div>
-            <SiteBrand />
-          </div>
-          <div>
+          <div className="site-footer-col">
             <h4>Product</h4>
             <Link to="/overview">Overview</Link>
             <Link to="/pricing">Pricing</Link>
             <Link to="/signup">Sign up</Link>
-            <Link to="/login">Log in</Link>
+            <h4 className="site-footer-gap">Company</h4>
+            <Link to="/about">About Us</Link>
           </div>
-          <div>
+          <div className="site-footer-col">
             <h4>Solutions</h4>
             {solutions.map((solution) => (
               <Link key={solution.slug} to={`/solutions/${solution.slug}`}>
-                For {solution.short}
+                For {solution.title}
               </Link>
             ))}
           </div>
-          <div>
-            <h4>Company</h4>
-            <Link to="/about">About us</Link>
-            <Link to="/terms">Terms of Service</Link>
-            <Link to="/privacy">Privacy Policy</Link>
-          </div>
-          <div>
+          <div className="site-footer-col">
             <h4>Account</h4>
+            <Link to="/login">Log In</Link>
             <Link to="/forgot-password">Reset password</Link>
             <Link to="/app/settings">Settings</Link>
           </div>
+          <div className="site-footer-col">
+            <h4>Legal</h4>
+            <Link to="/terms">Terms of Service</Link>
+            <Link to="/privacy">Privacy Policy</Link>
+          </div>
           <div className="site-footer-cta">
-            <Link to="/signup" className="site-pill site-pill-cyan site-pill-sm">
+            <Link to="/signup" className="site-pill site-pill-cyan">
               Try Fathom Clone today
             </Link>
           </div>
         </div>
         <div className="site-footer-bottom">
-          <div>
+          <nav aria-label="Legal">
             <Link to="/terms">Terms of Service</Link>
             <Link to="/privacy">Privacy Policy</Link>
-          </div>
-          <span>Fathom Clone © {new Date().getFullYear()}</span>
+          </nav>
+          <span>Fathom Clone © All Rights Reserved {new Date().getFullYear()}</span>
         </div>
       </div>
     </footer>
@@ -243,7 +243,7 @@ export function SiteLayout({ children }: { children: React.ReactNode }) {
       </a>
       <div className="site-announcement">
         <span className="site-announcement-badge">NEW</span>
-        Share any moment of a meeting with one link.
+        <span>Share any moment of a meeting with one link.</span>
         <Link to="/overview">Learn more →</Link>
       </div>
       <SiteHeader />
