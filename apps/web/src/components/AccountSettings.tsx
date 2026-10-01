@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import { KeyRound, LoaderCircle, Mail, Trash2, X } from 'lucide-react';
 import { accountRequest, useAuth } from '../auth-state';
@@ -87,7 +86,6 @@ function ChangePassword() {
 
 function DeleteAccount() {
   const auth = useAuth();
-  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -99,8 +97,7 @@ function DeleteAccount() {
     setError('');
     try {
       await accountRequest('delete-account', 'POST', { password });
-      await auth.refresh().catch(() => null);
-      navigate('/', { replace: true });
+      auth.forget();
     } catch (reason) {
       setError(message(reason));
     } finally {

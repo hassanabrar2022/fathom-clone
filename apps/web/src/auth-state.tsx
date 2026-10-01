@@ -13,6 +13,10 @@ export const sessionSchema = z.object({ user: userSchema.nullable() });
 type AuthState = {
   user: User | null;
   loading: boolean;
+  /** True after the user chose to leave (sign out or account deletion). */
+  leaving: boolean;
+  /** Clears the session locally after the server already ended it. */
+  forget: () => void;
   refresh: () => Promise<User | null>;
   signOut: () => Promise<void>;
 };
@@ -44,6 +48,7 @@ export async function accountRequest(
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [leaving, setLeaving] = useState(false);
   const refresh = useCallback(async () => {
     const result = sessionSchema.parse(await accountRequest('session'));
     setUser(result.user);
@@ -70,10 +75,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const signOut = useCallback(async () => {
     await accountRequest('logout', 'POST');
+    setLeaving(true);
+    setUser(null);
+  }, []);
+  const forget = useCallback(() => {
+    setLeaving(true);
     setUser(null);
   }, []);
   return (
-    <Context.Provider value={{ user, loading, refresh, signOut }}>
+    <Context.Provider
+      value={{ user, loading, leaving, forget, refresh, signOut }}
+    >
       {children}
     </Context.Provider>
   );

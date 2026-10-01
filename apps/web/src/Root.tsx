@@ -34,9 +34,10 @@ function RouteLoading() {
 
 /** The workspace is for signed-in users; send everyone else to sign in. */
 function RequireAccount({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, leaving } = useAuth();
   const location = useLocation();
   if (loading) return <RouteLoading />;
+  if (!user && leaving) return <Navigate to="/" replace />;
   if (!user) {
     const next = `${location.pathname}${location.search}`;
     return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace />;
