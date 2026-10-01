@@ -81,8 +81,8 @@ npm run lint
 npm run typecheck
 npm test                 # unit tests (Vitest)
 npm run build
-npx playwright install chromium
-npm run test:e2e         # browser tests (Playwright)
+npx playwright install chromium firefox
+npm run test:e2e         # browser tests (Chromium, Firefox, mobile)
 npm run audit:secrets    # scans the repo and build for leaked credentials
 ```
 

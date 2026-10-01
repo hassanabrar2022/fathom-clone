@@ -1,3 +1,5 @@
+import type { Page } from '@playwright/test';
+
 import { expect, test, user } from './fixtures';
 
 // These flows start signed out; individual tests mock the auth responses.
@@ -13,6 +15,21 @@ const viewports = [
   { width: 390, height: 844 },
 ];
 
+// Below 992px the header's links collapse behind a menu button, and the menu
+// closes again on every navigation. Returns whichever nav the current viewport
+// actually offers, opening it first when it is the collapsed one.
+async function openNav(page: Page) {
+  const main = page.getByRole('navigation', { name: 'Main' });
+  if (await main.isVisible()) return main;
+  // The menu closes itself on navigation. Waiting for the button to read "Open
+  // menu" again lets that land first, so the click opens rather than re-closes.
+  const toggle = page.getByRole('button', { name: 'Open menu' });
+  await toggle.click();
+  const collapsed = page.getByRole('navigation', { name: 'Mobile' });
+  await collapsed.waitFor({ state: 'visible' });
+  return collapsed;
+}
+
 test('the public site reaches every page from its navigation', async ({
   page,
 }) => {
@@ -23,21 +40,36 @@ test('the public site reaches every page from its navigation', async ({
       name: 'AI notetaking for every recording',
     }),
   ).toBeAttached();
-  const nav = page.getByRole('navigation', { name: 'Main' });
-  await nav.getByRole('link', { name: 'Pricing' }).click();
+  await (await openNav(page)).getByRole('link', { name: 'Pricing' }).click();
   await expect(page).toHaveURL(/\/pricing$/);
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Pricing');
-  await nav.getByRole('link', { name: 'Overview' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(
+    'Pricing',
+  );
+  await (await openNav(page)).getByRole('link', { name: 'Overview' }).click();
   await expect(page).toHaveURL(/\/overview$/);
-  await nav.getByRole('button', { name: 'Solutions' }).click();
-  await page.getByRole('link', { name: 'For sales' }).first().click();
+  // Solutions hide behind a dropdown on the wide header and are listed outright
+  // in the collapsed menu.
+  const nav = await openNav(page);
+  const solutionsMenu = nav.getByRole('button', { name: 'Solutions' });
+  // The wide header opens this dropdown on hover, so clicking it would toggle it
+  // straight back shut.
+  if (await solutionsMenu.isVisible()) await solutionsMenu.hover();
+  await nav.getByRole('link', { name: 'For sales' }).first().click();
   await expect(page).toHaveURL(/\/solutions\/sales$/);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await nav.getByRole('link', { name: 'About' }).click();
+  await (await openNav(page)).getByRole('link', { name: 'About' }).click();
   await expect(page).toHaveURL(/\/about$/);
-  await page.getByRole('contentinfo').getByRole('link', { name: 'Privacy Policy' }).first().click();
+  await page
+    .getByRole('contentinfo')
+    .getByRole('link', { name: 'Privacy Policy' })
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/privacy$/);
-  await page.getByRole('contentinfo').getByRole('link', { name: 'Terms of Service' }).first().click();
+  await page
+    .getByRole('contentinfo')
+    .getByRole('link', { name: 'Terms of Service' })
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/terms$/);
   await page.goto('/solutions/unknown');
   await expect(page).toHaveURL(/\/$/);
@@ -57,7 +89,13 @@ test('public pages fit every width without sideways scrolling', async ({
 }) => {
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
-    for (const path of ['/', '/pricing', '/overview', '/solutions/sales', '/login']) {
+    for (const path of [
+      '/',
+      '/pricing',
+      '/overview',
+      '/solutions/sales',
+      '/login',
+    ]) {
       await page.goto(path);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - window.innerWidth,
@@ -80,9 +118,9 @@ test('the mobile menu opens and closes on navigation', async ({ page }) => {
 test('reduced motion shows the full headline immediately', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
-  await expect(page.locator('.home-hero h1 [aria-hidden="true"]')).toContainText(
-    'AI notetaking for every recording',
-  );
+  await expect(
+    page.locator('.home-hero h1 [aria-hidden="true"]'),
+  ).toContainText('AI notetaking for every recording');
 });
 
 test('immediate signup enters the existing dashboard when confirmation is disabled', async ({
@@ -96,7 +134,9 @@ test('immediate signup enters the existing dashboard when confirmation is disabl
   await expect(
     page.getByRole('heading', { name: 'Your conversations. All connected.' }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Sign out' }).first()).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Sign out' }).first(),
+  ).toBeVisible();
 });
 
 test('signup waits for actual confirmation; errors and password visibility are usable', async ({
@@ -145,10 +185,15 @@ test('confirmed login enters the app and sign-out closes the workspace', async (
   await expect(
     page.getByRole('heading', { name: 'Your conversations. All connected.' }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Sign out' }).first()).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Sign out' }).first(),
+  ).toBeVisible();
   await page.goto('/signup');
   await expect(page).toHaveURL(/\/app$/);
-  await page.locator('.sidebar-signout').click();
+  await page
+    .getByRole('button', { name: 'Sign out' })
+    .filter({ visible: true })
+    .click();
   // Signed out, the workspace is closed until the next sign-in.
   await expect(page).not.toHaveURL(/\/app/);
   await page.goto('/app');
@@ -163,7 +208,9 @@ test('confirmed email callback establishes a session and clears URL tokens', asy
   );
   await expect(page).toHaveURL(/\/app$/);
   await expect(page).not.toHaveURL(/access_token/);
-  await expect(page.getByRole('button', { name: 'Sign out' }).first()).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Sign out' }).first(),
+  ).toBeVisible();
 });
 
 test('the workspace theme choice survives sign-in and reload', async ({
@@ -192,11 +239,17 @@ test('the workspace sends signed-out visitors to sign in and returns them after'
   await page.getByLabel('Email address').fill(user.email);
   await page.getByLabel('Password', { exact: true }).fill('secure-passphrase');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/app/meetings/${api.meetings[0].id}$`));
-  await expect(page.getByRole('heading', { name: 'Pilot planning' })).toBeVisible();
+  await expect(page).toHaveURL(
+    new RegExp(`/app/meetings/${api.meetings[0].id}$`),
+  );
+  await expect(
+    page.getByRole('heading', { name: 'Pilot planning' }),
+  ).toBeVisible();
 });
 
-test('sign-in ignores a destination outside the workspace', async ({ page }) => {
+test('sign-in ignores a destination outside the workspace', async ({
+  page,
+}) => {
   await page.goto('/login?next=https://evil.example/app');
   await page.getByLabel('Email address').fill(user.email);
   await page.getByLabel('Password', { exact: true }).fill('secure-passphrase');
@@ -215,9 +268,15 @@ test('forgot password sends a reset link without revealing accounts', async ({
   await expect(page.getByRole('alert')).toContainText('valid email');
   await page.getByLabel('Email address').fill('someone@example.com');
   await page.getByRole('button', { name: 'Send reset link' }).click();
-  await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
-  await expect(page.getByText('If someone@example.com has an account')).toBeVisible();
-  expect(api.calls.find((call) => call.path === '/api/auth/recover')?.body).toEqual({
+  await expect(
+    page.getByRole('heading', { name: 'Check your inbox' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('If someone@example.com has an account'),
+  ).toBeVisible();
+  expect(
+    api.calls.find((call) => call.path === '/api/auth/recover')?.body,
+  ).toEqual({
     email: 'someone@example.com',
   });
 });
@@ -230,32 +289,48 @@ test('a reset link signs in, then saves a matching new password', async ({
     `/auth/reset#access_token=${'a'.repeat(80)}&refresh_token=${'r'.repeat(12)}&type=recovery`,
   );
   await expect(page).toHaveURL(/\/auth\/reset$/);
-  await expect(page.getByRole('heading', { name: 'Choose a new password.' })).toBeVisible();
-  await page.getByLabel('New password', { exact: true }).fill('a new passphrase');
+  await expect(
+    page.getByRole('heading', { name: 'Choose a new password.' }),
+  ).toBeVisible();
+  await page
+    .getByLabel('New password', { exact: true })
+    .fill('a new passphrase');
   await page.getByLabel('Confirm new password').fill('something else');
   await page.getByRole('button', { name: 'Save new password' }).click();
   await expect(page.getByRole('alert')).toContainText('don’t match');
   await page.getByLabel('Confirm new password').fill('a new passphrase');
   await page.getByRole('button', { name: 'Save new password' }).click();
   await expect(page).toHaveURL(/\/app$/);
-  expect(api.calls.find((call) => call.path === '/api/auth/recovery')?.body).toEqual({
+  expect(
+    api.calls.find((call) => call.path === '/api/auth/recovery')?.body,
+  ).toEqual({
     access_token: 'a'.repeat(80),
     refresh_token: 'r'.repeat(12),
   });
-  expect(api.calls.find((call) => call.path === '/api/auth/password')?.body).toEqual({
+  expect(
+    api.calls.find((call) => call.path === '/api/auth/password')?.body,
+  ).toEqual({
     password: 'a new passphrase',
   });
 });
 
-test('an expired or incomplete reset link offers a new one', async ({ page }) => {
+test('an expired or incomplete reset link offers a new one', async ({
+  page,
+}) => {
   await page.goto('/auth/reset');
-  await expect(page.getByRole('heading', { name: 'Link expired' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Link expired' }),
+  ).toBeVisible();
   await page.getByRole('link', { name: 'Request a new link' }).click();
   await expect(page).toHaveURL(/\/forgot-password$/);
 
   await page.route('**/api/auth/recovery', (route) =>
     route.fulfill({ status: 400, json: { message: 'This link has expired.' } }),
   );
-  await page.goto(`/auth/reset#access_token=${'a'.repeat(80)}&refresh_token=${'r'.repeat(12)}`);
-  await expect(page.getByRole('heading', { name: 'Link expired' })).toBeVisible();
+  await page.goto(
+    `/auth/reset#access_token=${'a'.repeat(80)}&refresh_token=${'r'.repeat(12)}`,
+  );
+  await expect(
+    page.getByRole('heading', { name: 'Link expired' }),
+  ).toBeVisible();
 });
