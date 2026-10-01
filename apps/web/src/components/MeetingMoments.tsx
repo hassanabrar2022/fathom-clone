@@ -17,6 +17,7 @@ import {
   type PersistedMoment,
   type MeetingMoment,
 } from '../../../../packages/shared/recording';
+import { scrollBehavior } from '../motion';
 import { uploadApi } from '../data/uploads';
 import { useApiData } from '../data/meetings';
 const momentsSchema = persistedMomentSchema.array();
@@ -60,7 +61,10 @@ export function MeetingMoments({
   useEffect(() => {
     if (!draft) return;
     window.requestAnimationFrame(() =>
-      panel.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+      panel.current?.scrollIntoView({
+        behavior: scrollBehavior(),
+        block: 'center',
+      }),
     );
   }, [draft]);
 

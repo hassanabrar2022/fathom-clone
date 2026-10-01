@@ -29,6 +29,7 @@ import {
 import { contextualSnippet } from '../../../../packages/shared/search';
 import { HighlightText } from './MeetingSearch';
 import { MeetingIntelligence } from './MeetingIntelligence';
+import { scrollBehavior } from '../motion';
 import { MeetingMoments, type MomentDraft } from './MeetingMoments';
 import './recording.css';
 
@@ -67,8 +68,10 @@ export function RecordingExperience({
   const [selectedMatchIndex, setSelectedMatchIndex] = useState(-1);
   const [notice, setNotice] = useState('');
   const speakerColor = (id: string) =>
-    Math.max(0, recording.speakers.findIndex((speaker) => speaker.id === id)) %
-    SPEAKER_COLORS;
+    Math.max(
+      0,
+      recording.speakers.findIndex((speaker) => speaker.id === id),
+    ) % SPEAKER_COLORS;
   const [mediaAttempt, setMediaAttempt] = useState(0);
   const [momentDraft, setMomentDraft] = useState<MomentDraft | null>(null);
   const [speakerNames, setSpeakerNames] = useState<Record<string, string>>(
@@ -266,7 +269,7 @@ export function RecordingExperience({
           `[data-segment-id="${CSS.escape(segmentId)}"]`,
         )
       : null;
-    row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row?.scrollIntoView({ block: 'center', behavior: scrollBehavior() });
   }
 
   function openTranscriptMatch(index: number) {
@@ -279,7 +282,7 @@ export function RecordingExperience({
     );
     row?.querySelectorAll('p')[match.paragraphIndex]?.scrollIntoView({
       block: 'center',
-      behavior: 'smooth',
+      behavior: scrollBehavior(),
     });
   }
 

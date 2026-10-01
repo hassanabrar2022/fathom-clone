@@ -13,6 +13,7 @@ import {
   Target,
   Zap,
 } from 'lucide-react';
+import { scrollBehavior } from '../motion';
 import { SiteLayout, Starfield } from './SiteLayout';
 import {
   MockActions,
@@ -38,7 +39,11 @@ function useScrollProgress<T extends HTMLElement>() {
       const box = element.getBoundingClientRect();
       const travel = box.height - window.innerHeight;
       setProgress(
-        travel > 0 ? Math.min(1, Math.max(0, -box.top / travel)) : box.top < 0 ? 1 : 0,
+        travel > 0
+          ? Math.min(1, Math.max(0, -box.top / travel))
+          : box.top < 0
+            ? 1
+            : 0,
       );
     };
     const schedule = () => {
@@ -126,7 +131,10 @@ function Hero() {
           <div className="capsule capsule-wave">
             <div className="wave-bars">
               {Array.from({ length: 30 }, (_, index) => (
-                <span key={index} style={{ animationDelay: `${index * 70}ms` }} />
+                <span
+                  key={index}
+                  style={{ animationDelay: `${index * 70}ms` }}
+                />
               ))}
             </div>
           </div>
@@ -289,7 +297,10 @@ function Marquee() {
     </span>
   );
   return (
-    <section className="home-marquee site-dark" aria-label="Move work forward faster">
+    <section
+      className="home-marquee site-dark"
+      aria-label="Move work forward faster"
+    >
       <Starfield />
       <div className="marquee-track" aria-hidden="true">
         {item}
@@ -318,10 +329,22 @@ function TeamsCard() {
             'Search conversations, share the moments that matter, and keep work moving without the manual notes.',
           ],
           items: [
-            [Zap, 'Automatic transcripts, summaries, and action items reduce follow-up admin.'],
-            [Rocket, 'Turn conversations into clear next steps with owners and timing.'],
-            [ScanSearch, 'Keep decisions and commitments searchable across every meeting.'],
-            [Sparkles, 'Share a full meeting or a single moment with a link you can revoke.'],
+            [
+              Zap,
+              'Automatic transcripts, summaries, and action items reduce follow-up admin.',
+            ],
+            [
+              Rocket,
+              'Turn conversations into clear next steps with owners and timing.',
+            ],
+            [
+              ScanSearch,
+              'Keep decisions and commitments searchable across every meeting.',
+            ],
+            [
+              Sparkles,
+              'Share a full meeting or a single moment with a link you can revoke.',
+            ],
           ],
         }
       : {
@@ -425,7 +448,10 @@ const pillars = [
 
 function Pillars() {
   const [ref, progress] = useScrollProgress<HTMLElement>();
-  const active = Math.min(pillars.length - 1, Math.floor(progress * pillars.length));
+  const active = Math.min(
+    pillars.length - 1,
+    Math.floor(progress * pillars.length),
+  );
   return (
     <section className="home-pillars site-dark" ref={ref}>
       <Starfield />
@@ -439,7 +465,9 @@ function Pillars() {
               <h3>{pillar.title}</h3>
               <div className="home-pillar-body">
                 <div>
-                  <span className={`site-kicker ${pillar.tone}`}>✦ {pillar.kicker}</span>
+                  <span className={`site-kicker ${pillar.tone}`}>
+                    ✦ {pillar.kicker}
+                  </span>
                   <p>{pillar.body}</p>
                   <Link to="/signup" className={`site-pill ${pillar.pill}`}>
                     Get Started. It’s Free.
@@ -468,9 +496,27 @@ function Pillars() {
 }
 
 const stats = [
-  ['3 views', 'of every meeting: General, Sales, and Recruiting', 'tone-orange', 0, 0],
-  ['1 click', 'from any summary point back to where it was said', 'tone-pink', 0.08, 118],
-  ['60 sec', 'moments you can share with a link you control', 'tone-blue', 0.16, 222],
+  [
+    '3 views',
+    'of every meeting: General, Sales, and Recruiting',
+    'tone-orange',
+    0,
+    0,
+  ],
+  [
+    '1 click',
+    'from any summary point back to where it was said',
+    'tone-pink',
+    0.08,
+    118,
+  ],
+  [
+    '60 sec',
+    'moments you can share with a link you control',
+    'tone-blue',
+    0.16,
+    222,
+  ],
 ] as const;
 
 function Stats() {
@@ -520,7 +566,10 @@ const statements: Phrase[][] = [
   ],
   [
     'Every summary point and action item links back to the exact moment it was said, ',
-    { accent: 'grad-violet', text: 'so nobody has to take anyone’s word for it.' },
+    {
+      accent: 'grad-violet',
+      text: 'so nobody has to take anyone’s word for it.',
+    },
   ],
   [
     'Saved moments and shared meetings put the right context in front of the right people, ',
@@ -532,7 +581,10 @@ function words(phrases: Phrase[]) {
   return phrases.flatMap((phrase) => {
     const text = typeof phrase === 'string' ? phrase : phrase.text;
     const accent = typeof phrase === 'string' ? null : phrase.accent;
-    return text.split(/(\s+)/).filter(Boolean).map((word) => ({ word, accent }));
+    return text
+      .split(/(\s+)/)
+      .filter(Boolean)
+      .map((word) => ({ word, accent }));
   });
 }
 
@@ -636,7 +688,14 @@ function Orbit() {
               const ex = chip.x + (chip.side === 'left' ? 70 : -60);
               return (
                 <g key={chip.name}>
-                  <line x1={ex} y1={chip.y} x2={px} y2={py} stroke="#faf5f5" strokeWidth="1.5" />
+                  <line
+                    x1={ex}
+                    y1={chip.y}
+                    x2={px}
+                    y2={py}
+                    stroke="#faf5f5"
+                    strokeWidth="1.5"
+                  />
                   <circle cx={px} cy={py} r="4" fill="#faf5f5" />
                   <circle cx={ex} cy={chip.y} r="3" fill="#faf5f5" />
                 </g>
@@ -673,7 +732,10 @@ function Orbit() {
 function Roles() {
   const track = useRef<HTMLDivElement>(null);
   const scroll = (direction: number) =>
-    track.current?.scrollBy({ left: direction * 512, behavior: 'smooth' });
+    track.current?.scrollBy({
+      left: direction * 512,
+      behavior: scrollBehavior(),
+    });
   return (
     <section className="home-roles site-dark">
       <Starfield />
@@ -688,10 +750,18 @@ function Roles() {
           </Link>
         </div>
         <div className="home-roles-arrows">
-          <button type="button" aria-label="Previous team" onClick={() => scroll(-1)}>
+          <button
+            type="button"
+            aria-label="Previous team"
+            onClick={() => scroll(-1)}
+          >
             <ArrowLeft size={18} />
           </button>
-          <button type="button" aria-label="Next team" onClick={() => scroll(1)}>
+          <button
+            type="button"
+            aria-label="Next team"
+            onClick={() => scroll(1)}
+          >
             <ArrowRight size={18} />
           </button>
         </div>
@@ -733,7 +803,9 @@ export function CtaBand({
         ))}
       </div>
       <div className="site-cta-content">
-        <span className="site-kicker is-dark">✦ Never take meeting notes again</span>
+        <span className="site-kicker is-dark">
+          ✦ Never take meeting notes again
+        </span>
         <h2 className="site-h2 is-md">{title}</h2>
         <Link to="/signup" className="site-pill site-pill-yellow">
           Get Started. It’s Free.

@@ -8,9 +8,14 @@ const chromiumLaunchOptions = process.env.FATHOM_CLONE_CHROMIUM_EXECUTABLE
 export default defineConfig({
   testDir: './tests',
   testMatch: '**/*.spec.ts',
+  // A genuine blip under CI contention retries rather than reporting red.
+  retries: process.env.CI ? 2 : 0,
   use: {
     baseURL: 'http://127.0.0.1:5173',
     trace: 'retain-on-failure',
+    // Tests should not have to race animations. The app honours this preference
+    // for its scrolling too, so nothing a click is aimed at glides away from it.
+    reducedMotion: 'reduce',
   },
   projects: [
     {

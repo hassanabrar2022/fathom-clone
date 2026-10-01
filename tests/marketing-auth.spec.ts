@@ -87,6 +87,10 @@ test('pricing only offers plans that exist today', async ({ page }) => {
 test('public pages fit every width without sideways scrolling', async ({
   page,
 }) => {
+  // Five widths across five pages is 25 full page loads: about 11 seconds on its
+  // own, and past the default 30 second budget when three projects compete for
+  // the machine. Nothing here is racing, it is just long.
+  test.slow();
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     for (const path of [
@@ -116,6 +120,8 @@ test('the mobile menu opens and closes on navigation', async ({ page }) => {
 });
 
 test('reduced motion shows the full headline immediately', async ({ page }) => {
+  // Redundant with the project-wide default, kept so this test still states the
+  // condition it is actually about.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   await expect(
