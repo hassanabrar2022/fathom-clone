@@ -164,10 +164,14 @@ One-time setup:
    `node scripts/setup.mjs secrets`.
 
 5. **Demo data:** `npm run seed` creates the demo account and its eight
-   meetings. Re-running replaces the library and keeps every share link, because
-   ids and tokens are derived from the account id and the meeting key. Pass
-   `--no-media` to skip the audio upload (about 170 MB of silence across the
-   library) and `--clear` to remove the seeded meetings again.
+   meetings. It needs only `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in
+   `.dev.vars`; with `R2_BUCKET_NAME` set but no R2 access keys it uploads the
+   recordings through the wrangler CLI, so a `wrangler login` session is enough
+   and no bucket keys need to be stored. Re-running replaces the library and
+   keeps every share link, because ids and tokens are derived from the account
+   id and the meeting key. Pass `--no-media` to skip the audio upload (about
+   170 MB of silence across the library) and `--clear` to remove the seeded
+   meetings again.
 
 Each release: `npm run deploy`.
 

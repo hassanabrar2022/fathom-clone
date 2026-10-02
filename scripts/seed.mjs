@@ -13,8 +13,17 @@
 // The audio is silence of the recording's real length, so the player, the
 // transcript following playback, and the timestamp links all behave. The words
 // are in the transcript, not in the audio. scripts/seed-data.mjs is the library.
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseEnv } from 'node:util';
 
@@ -126,29 +135,120 @@ export function meetingRows(meeting, userId, mediaSize) {
   };
 }
 
+/** True when .dev.vars carries a full set of R2 S3 credentials. */
+function hasS3Credentials(values) {
+  return [
+    'R2_ACCOUNT_ID',
+    'R2_BUCKET_NAME',
+    'R2_ACCESS_KEY_ID',
+    'R2_SECRET_ACCESS_KEY',
+  ].every((name) => values[name]);
+}
+
 export function readCredentials(withMedia) {
   if (!existsSync('.dev.vars')) {
     throw new Error(
-      'No .dev.vars found. Copy .dev.vars.example and fill in Supabase and R2 values first.',
+      'No .dev.vars found. Copy .dev.vars.example and fill in the Supabase values first.',
     );
   }
   const values = {
     ...(existsSync('.env') ? parseEnv(readFileSync('.env', 'utf8')) : {}),
     ...parseEnv(readFileSync('.dev.vars', 'utf8')),
   };
-  const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
-  if (withMedia) {
-    required.push(
-      'R2_ACCOUNT_ID',
-      'R2_BUCKET_NAME',
-      'R2_ACCESS_KEY_ID',
-      'R2_SECRET_ACCESS_KEY',
+  // Only Supabase genuinely has to be pasted in: its URL and service role key
+  // cannot be read back out of Cloudflare, because Worker secrets are
+  // write-only. The bucket can be reached either way -- see uploaderFor.
+  const missing = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'].filter(
+    (name) => !values[name] || values[name].includes('<'),
+  );
+  if (missing.length) {
+    throw new Error(
+      `Missing or still a placeholder in .dev.vars: ${missing.join(', ')}`,
     );
   }
-  const missing = required.filter((name) => !values[name]);
-  if (missing.length)
-    throw new Error(`Missing in .dev.vars: ${missing.join(', ')}`);
+  if (withMedia && !hasS3Credentials(values) && !values.R2_BUCKET_NAME) {
+    throw new Error(
+      'Media upload needs R2_BUCKET_NAME in .dev.vars (or pass --no-media).',
+    );
+  }
   return values;
+}
+
+/**
+ * Two ways into the bucket. R2 S3 credentials when .dev.vars has them, and
+ * otherwise the wrangler CLI, which uses the OAuth session from `wrangler login`
+ * and so needs no keys pasted anywhere.
+ */
+function uploaderFor(values) {
+  if (hasS3Credentials(values)) {
+    const client = new AwsClient({
+      accessKeyId: values.R2_ACCESS_KEY_ID,
+      secretAccessKey: values.R2_SECRET_ACCESS_KEY,
+      service: 's3',
+      region: 'auto',
+    });
+    return {
+      how: 'R2 S3 credentials',
+      async put(key, body) {
+        const url =
+          `https://${values.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/` +
+          `${values.R2_BUCKET_NAME}/${key}`;
+        const response = await client.fetch(url, {
+          method: 'PUT',
+          body,
+          headers: {
+            'Content-Type': 'audio/wav',
+            'Content-Length': String(body.length),
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`R2 upload failed (${response.status}) for ${key}`);
+        }
+      },
+      done() {},
+    };
+  }
+  const scratch = mkdtempSync(join(tmpdir(), 'fathom-seed-'));
+  return {
+    how: 'the wrangler CLI (no R2 keys needed)',
+    async put(key, body) {
+      // wrangler takes a file rather than stdin, so the bytes sit on disk for
+      // exactly as long as the upload takes.
+      const file = join(scratch, 'media.wav');
+      writeFileSync(file, body);
+      try {
+        const result = spawnSync(
+          'npx',
+          [
+            'wrangler',
+            'r2',
+            'object',
+            'put',
+            `${values.R2_BUCKET_NAME}/${key}`,
+            '--file',
+            file,
+            '--content-type',
+            'audio/wav',
+            '--remote',
+          ],
+          { encoding: 'utf8', env: process.env },
+        );
+        if (result.status !== 0) {
+          const reason = (result.stderr || result.stdout || '')
+            .trim()
+            .split('\n')
+            .filter(Boolean)
+            .pop();
+          throw new Error(`wrangler upload failed for ${key}: ${reason}`);
+        }
+      } finally {
+        rmSync(file, { force: true });
+      }
+    },
+    done() {
+      rmSync(scratch, { recursive: true, force: true });
+    },
+  };
 }
 
 function supabaseClient(values) {
@@ -217,14 +317,8 @@ async function main() {
   const withMedia = !flags.has('--no-media') && !clearOnly;
   const values = readCredentials(withMedia);
   const supabase = supabaseClient(values);
-  const r2 = withMedia
-    ? new AwsClient({
-        accessKeyId: values.R2_ACCESS_KEY_ID,
-        secretAccessKey: values.R2_SECRET_ACCESS_KEY,
-        service: 's3',
-        region: 'auto',
-      })
-    : null;
+  const uploader = withMedia ? uploaderFor(values) : null;
+  if (uploader) console.log(`Uploading recordings with ${uploader.how}.`);
 
   const user = await demoUser(supabase);
   console.log(
@@ -249,22 +343,7 @@ async function main() {
     const media = withMedia ? silentWav(meeting.durationSeconds) : null;
     const rows = meetingRows(meeting, user.id, media?.length);
     if (media) {
-      const url =
-        `https://${values.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/` +
-        `${values.R2_BUCKET_NAME}/${rows.meeting.storage_key}/media`;
-      const response = await r2.fetch(url, {
-        method: 'PUT',
-        body: media,
-        headers: {
-          'Content-Type': 'audio/wav',
-          'Content-Length': String(media.length),
-        },
-      });
-      if (!response.ok) {
-        throw new Error(
-          `R2 upload failed (${response.status}) for ${rows.meeting.storage_key}`,
-        );
-      }
+      await uploader.put(`${rows.meeting.storage_key}/media`, media);
       uploadedBytes += media.length;
     }
 
@@ -306,6 +385,7 @@ async function main() {
       ? `Uploaded ${(uploadedBytes / 1_048_576).toFixed(1)} MB of placeholder audio to R2.`
       : 'No media uploaded (--no-media), so playback is unavailable.',
   );
+  uploader?.done?.();
   console.log('\nPublic links (append to the app origin):');
   console.log(links.join('\n'));
 }
