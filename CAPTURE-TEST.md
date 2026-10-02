@@ -12,16 +12,28 @@ not going to reconstruct or backdate a log from the diffs, because that would be
 a fabrication and the instructions say dead ends and misses are worth more than a
 clean-looking record.
 
-One more gap, for the same reason: **the session that installed the hook is not
-in the log either.** Claude Code reads `.claude/settings.json` when a session
-starts, so a hook written mid-session does not apply to the session that wrote
-it. That session also did the four fixes committed after `e02b591` -- the seed
-library, the viewport test fixes, the CI change, and the reduced-motion scroll
-fix -- so those commits have no matching log entries. Every session started after
-it does.
+The installing session is captured only in part, and this is worth being precise
+about because I got it wrong once already. I first wrote here that the session
+which installed the hook was not captured at all, on the reasoning that Claude
+Code reads `.claude/settings.json` at session start. That turned out to be
+false: the hook began firing partway through that same session, at the `Stop` of
+the turn during which it was installed. So
+`2026-10-01_17-04-45_661a8467-...md` exists and holds the later half of it.
 
-Everything from the next session onward is captured automatically, with no
-further action needed.
+What is genuinely missing from that file is the earlier half: the prompts and
+responses that produced the four fixes committed as `e02b591` through `e8ac4a0`
+-- the capture hook itself, the seed library, the viewport test fixes and the CI
+change, and the reduced-motion scroll fix. Those turns happened before the hook
+fired and are not recoverable.
+
+That file also opens with a `RESPONSE num=0`, which is not an off-by-one.
+Number 0 means the prompt being answered was never captured, which is true for
+exactly that one turn -- the hook started at its end, so it saw the response and
+not the prompt. It is real output, so it is kept rather than deleted to make the
+log read more neatly.
+
+Every session started after the hook is captured whole, with no further action
+needed.
 
 ## Tool and model
 

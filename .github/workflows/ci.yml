@@ -24,3 +24,14 @@ jobs:
       - run: npx playwright test
         env:
           CI: true
+      # Without this a browser failure on CI is only a stack trace, and the DOM
+      # snapshot and trace that would explain it are thrown away with the runner.
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -57,7 +57,11 @@ function main() {
   );
   const entry = renderEntry({
     type: MODE === 'prompt' ? 'PROMPT' : 'RESPONSE',
-    // A response carries the number of the prompt it answers.
+    // A response carries the number of the prompt it answers. Number 0 means
+    // the prompt it answers was never captured, which happens exactly once: on
+    // the turn the hook was installed, whose prompt was submitted before the
+    // hook existed. The response is still real output, so it is kept rather
+    // than dropped to make the log look tidy.
     num: countPrompts(body) + (MODE === 'prompt' ? 1 : 0),
     session: sessionId.slice(0, 8),
     timestamp,

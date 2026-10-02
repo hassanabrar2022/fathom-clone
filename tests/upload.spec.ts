@@ -34,12 +34,19 @@ test('an upload goes straight to storage and processing continues in the backgro
   await expect(page.getByLabel('Meeting title')).toHaveValue('Standup notes');
   await page.getByRole('button', { name: 'Upload & transcribe' }).click();
   await expect(page).toHaveURL(/\/app\/meetings\/[0-9a-f-]{36}$/);
-  await expect(page.getByText('You can leave this page; processing continues.')).toBeVisible();
+  await expect(
+    page.getByText('You can leave this page; processing continues.'),
+  ).toBeVisible();
   expect(uploads).toEqual([expect.stringContaining('/staging/')]);
   const created = api.meetings[0];
-  expect(created).toMatchObject({ title: 'Standup notes', status: 'transcribing' });
+  expect(created).toMatchObject({
+    title: 'Standup notes',
+    status: 'transcribing',
+  });
   expect(
-    api.calls.filter((call) => call.path === `/api/uploads/${created.id}/process`),
+    api.calls.filter(
+      (call) => call.path === `/api/uploads/${created.id}/process`,
+    ),
   ).toHaveLength(1);
 
   Object.assign(created, {
@@ -65,21 +72,46 @@ test('analysis failure keeps the transcript playable and retry starts a new run'
   });
   await page.goto(open);
   await expect(page.getByText('Let’s ship the pilot on Friday.')).toBeVisible();
-  await expect(page.getByText('Transcript complete. AI analysis failed.', { exact: false })).toBeVisible();
-  await page.getByRole('button', { name: 'Play recording', exact: true }).click();
+  await expect(
+    page.getByText('Transcript complete. AI analysis failed.', {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Play recording', exact: true })
+    .click();
   await expect
     .poll(() => page.locator('video').evaluate((video) => video.currentTime))
     .toBeGreaterThan(0);
-  await page.getByRole('button', { name: 'Pause recording', exact: true }).click();
+  // Pause before retrying. Which label the transport button carries depends on
+  // whether the media is still playing, and a headless Linux runner has no audio
+  // device to sustain playback with -- it passes locally and fails on CI for that
+  // reason alone. The retry being tested does not depend on playback, so drive
+  // the player to paused rather than assuming it is still going.
+  const transport = page.getByRole('button', {
+    name: /^(Play|Pause) recording$/,
+  });
+  await expect
+    .poll(async () => {
+      if ((await transport.getAttribute('aria-label')) === 'Pause recording') {
+        await transport.click();
+      }
+      return page.locator('video').evaluate((video) => video.paused);
+    })
+    .toBe(true);
   await page.getByRole('button', { name: 'Retry processing' }).click();
-  await expect(page.getByText('Creating summaries', { exact: false })).toHaveCount(0);
+  await expect(
+    page.getByText('Creating summaries', { exact: false }),
+  ).toHaveCount(0);
   Object.assign(api.meetings[0], {
     status: 'complete',
     processing_progress: 100,
     processing_error: null,
     intelligence,
   });
-  await expect(page.getByText('AI analysis · grounded in your transcript')).toBeVisible({
+  await expect(
+    page.getByText('AI analysis · grounded in your transcript'),
+  ).toBeVisible({
     timeout: 10000,
   });
 });
@@ -92,16 +124,26 @@ test('an interrupted upload asks for the file again', async ({ page, api }) => {
     intelligence: null,
   });
   await page.goto(open);
-  await expect(page.getByRole('button', { name: 'Choose recording to retry' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Retry processing' })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Choose recording to retry' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Retry processing' }),
+  ).toHaveCount(0);
 });
 
 test('a recording with no speech stays playable', async ({ page, api }) => {
   api.meetings[0] = meeting({ transcript: [], intelligence: null });
   await page.goto(open);
-  await expect(page.getByRole('heading', { name: 'No speech detected' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'No transcript available' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Play recording', exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole('heading', { name: 'No speech detected' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'No transcript available' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Play recording', exact: true }),
+  ).toBeEnabled();
 });
 
 test('transcription failure is explicit, retryable, and stops polling', async ({
@@ -117,17 +159,24 @@ test('transcription failure is explicit, retryable, and stops polling', async ({
   });
   await page.goto(open);
   await expect(
-    page.getByText('We couldn’t transcribe this recording. Your uploaded media is saved; try again.'),
+    page.getByText(
+      'We couldn’t transcribe this recording. Your uploaded media is saved; try again.',
+    ),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Retry processing' })).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: 'Retry processing' }),
+  ).toBeEnabled();
   const reads = () =>
-    api.calls.filter((call) => call.path === `/api/uploads/${meetingId}`).length;
+    api.calls.filter((call) => call.path === `/api/uploads/${meetingId}`)
+      .length;
   const settled = reads();
   await page.waitForTimeout(2800);
   expect(reads()).toBe(settled);
 });
 
-test('the upload form rejects empty files and fits a phone screen', async ({ page }) => {
+test('the upload form rejects empty files and fits a phone screen', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/app/upload');
   await page.getByLabel('Recording file').setInputFiles({
@@ -136,7 +185,9 @@ test('the upload form rejects empty files and fits a phone screen', async ({ pag
     buffer: Buffer.alloc(0),
   });
   await expect(page.getByRole('alert')).toContainText('non-empty recording');
-  await expect(page.getByRole('button', { name: 'Upload & transcribe' })).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Upload & transcribe' }),
+  ).toBeDisabled();
   expect(await fitsViewport(page)).toBe(true);
 });
 
@@ -145,7 +196,10 @@ test('daily upload limits are shown to the user', async ({ page }) => {
     route.request().method() === 'POST'
       ? route.fulfill({
           status: 429,
-          json: { message: 'You have reached today’s upload limit. Please try again tomorrow.' },
+          json: {
+            message:
+              'You have reached today’s upload limit. Please try again tomorrow.',
+          },
         })
       : route.fallback(),
   );
