@@ -217,30 +217,51 @@ function uploaderFor(values) {
       const file = join(scratch, 'media.wav');
       writeFileSync(file, body);
       try {
-        const result = spawnSync(
-          'npx',
-          [
-            'wrangler',
-            'r2',
-            'object',
-            'put',
-            `${values.R2_BUCKET_NAME}/${key}`,
-            '--file',
-            file,
-            '--content-type',
-            'audio/wav',
-            '--remote',
-          ],
-          { encoding: 'utf8', env: process.env },
-        );
-        if (result.status !== 0) {
-          const reason = (result.stderr || result.stdout || '')
-            .trim()
-            .split('\n')
-            .filter(Boolean)
-            .pop();
-          throw new Error(`wrangler upload failed for ${key}: ${reason}`);
+        // The OAuth token wrangler uses expires, and a long seed run can land a
+        // request in the gap while it refreshes: that comes back as a bare 401
+        // from the R2 API. Retrying picks up the refreshed token.
+        let last = '';
+        for (let attempt = 1; attempt <= 4; attempt += 1) {
+          const result = spawnSync(
+            'npx',
+            [
+              'wrangler',
+              'r2',
+              'object',
+              'put',
+              `${values.R2_BUCKET_NAME}/${key}`,
+              '--file',
+              file,
+              '--content-type',
+              'audio/wav',
+              '--remote',
+            ],
+            { encoding: 'utf8', env: process.env },
+          );
+          if (result.status === 0) return;
+          // Keep the line that says what went wrong, not wrangler's trailing
+          // "Logs were written to ..." note.
+          last =
+            (result.stderr || result.stdout || '')
+              .split('\n')
+              .map((line) => line.trim())
+              .filter((line) =>
+                /error|unauthor|denied|exceed|failed/i.test(line),
+              )
+              .filter((line) => !/logs were written/i.test(line))
+              .join(' ') || `exit ${result.status}`;
+          if (attempt < 4) {
+            Atomics.wait(
+              new Int32Array(new SharedArrayBuffer(4)),
+              0,
+              0,
+              attempt * 2000,
+            );
+          }
         }
+        throw new Error(
+          `wrangler upload failed for ${key} after 4 tries: ${last}`,
+        );
       } finally {
         rmSync(file, { force: true });
       }
