@@ -83,22 +83,17 @@ test('analysis failure keeps the transcript playable and retry starts a new run'
   await expect
     .poll(() => page.locator('video').evaluate((video) => video.currentTime))
     .toBeGreaterThan(0);
-  // Pause before retrying. Which label the transport button carries depends on
-  // whether the media is still playing, and a headless Linux runner has no audio
-  // device to sustain playback with -- it passes locally and fails on CI for that
-  // reason alone. The retry being tested does not depend on playback, so drive
-  // the player to paused rather than assuming it is still going.
-  const transport = page.getByRole('button', {
-    name: /^(Play|Pause) recording$/,
-  });
-  await expect
-    .poll(async () => {
-      if ((await transport.getAttribute('aria-label')) === 'Pause recording') {
-        await transport.click();
-      }
-      return page.locator('video').evaluate((video) => video.paused);
-    })
-    .toBe(true);
+  // Pause the media and check the transport control follows it. Clicking the
+  // control instead needs playback to still be running, which a headless Linux
+  // runner will not do: it either stops or errors once started, and on error the
+  // component sets playing false and disables the control while the element
+  // itself never pauses, so nothing moves and nothing can click it. Pausing the
+  // element directly asserts the half that matters -- the label reflects the
+  // media state -- and holds whether or not the runner kept the audio alive.
+  await page.locator('video').evaluate((video) => video.pause());
+  await expect(
+    page.getByRole('button', { name: 'Play recording', exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Retry processing' }).click();
   await expect(
     page.getByText('Creating summaries', { exact: false }),
