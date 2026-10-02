@@ -20,8 +20,21 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npx wrangler deploy --dry-run --outdir dist-worker
-      - run: npx playwright install --with-deps chromium firefox
-      - run: npx playwright test
+      # Only Chromium is installed here. The mobile project runs on Chromium too
+      # (defaultBrowserType), so these two cover every viewport the suite checks
+      # and the runner already has their system libraries. Adding Firefox means
+      # apt installing 41 packages and 168 MB of codecs and fonts on every run,
+      # about ten minutes, to re-run tests that had already passed on Chromium.
+      # Firefox stays in playwright.config.ts and runs locally with
+      # `npm run test:e2e`.
+      - id: playwright-version
+        run: echo "v=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.v }}
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --project=chromium --project=mobile
         env:
           CI: true
       # Without this a browser failure on CI is only a stack trace, and the DOM

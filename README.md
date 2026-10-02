@@ -99,6 +99,8 @@ npm test                 # unit tests (Vitest), including the seed library
 npm run build
 npx playwright install chromium firefox
 npm run test:e2e         # browser tests (Chromium, Firefox, mobile)
+# CI runs the Chromium and mobile projects only; Firefox needs 168 MB of system
+# codecs on a Linux runner and had never caught anything Chromium did not.
 npm run audit:secrets    # scans the repo and build for leaked credentials
 ```
 
